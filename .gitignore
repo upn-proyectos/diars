@@ -1,0 +1,48 @@
+# ============================================================
+# .NET / C# / VISUAL STUDIO
+# ============================================================
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+
+# ============================================================
+# FRONTEND (Node / Vite / React)
+# ============================================================
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.*
+!.env.example
+*.log
+tsconfig.tsbuildinfo
+
+# ============================================================
+# SEGURIDAD Y CREDENCIALES
+# ============================================================
+*.bak
+*.sql.bak
+*.pem
+*.key
+*.cert
+
+# ============================================================
+# HERRAMIENTAS Y TEMPORALES
+# ============================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
