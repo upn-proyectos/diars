@@ -26,8 +26,10 @@ dist-ssr/
 tsconfig.tsbuildinfo
 
 # ============================================================
-# SEGURIDAD Y CREDENCIALES
+# SEGURIDAD, CREDENCIALES Y DOCUMENTOS INTERNOS
 # ============================================================
+PLAN_DESARROLLO.md
+CONTEXTO_SISTEMA.md
 *.bak
 *.sql.bak
 *.pem
