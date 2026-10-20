@@ -1,0 +1,38 @@
+@model Minimarket.Front.Models.ModuloEnDesarrolloViewModel
+@{
+    ViewData["Title"] = $"{Model.Modulo} - En Desarrollo";
+}
+
+<div class="max-w-2xl mx-auto my-8">
+    <div class="card-chininin p-8 text-center space-y-6">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-brand-50 text-brand-600 shadow-inner">
+            <i data-lucide="@Model.Icono" class="w-10 h-10"></i>
+        </div>
+
+        <div class="space-y-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Módulo en Construcción · @Model.Fase
+            </span>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">@Model.Modulo</h1>
+            <p class="text-sm text-slate-500 max-w-md mx-auto">
+                @Model.Descripcion
+            </p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.Patron))
+        {
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/60 text-left max-w-md mx-auto space-y-1.5">
+                <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                    <i data-lucide="layers" class="w-4 h-4 text-brand-600"></i> Patrón de Diseño Previsto:
+                </div>
+                <div class="text-sm font-semibold text-brand-700">@Model.Patron</div>
+            </div>
+        }
+
+        <div class="pt-2 flex items-center justify-center gap-3">
+            <a asp-controller="Home" asp-action="Index" class="btn-brand-primary">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al Dashboard
+            </a>
+        </div>
+    </div>
+</div>

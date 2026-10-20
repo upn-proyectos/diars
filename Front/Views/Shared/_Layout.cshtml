@@ -1,50 +1,278 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@{
+    // Obtener rol simulado para evaluación visual de la Fase 2 (vía cookie o query string, default: Administrador)
+    var currentRole = Context.Request.Query["rol"].ToString();
+    if (string.IsNullOrEmpty(currentRole))
+    {
+        currentRole = Context.Request.Cookies["chininin_preview_role"] ?? "Administrador";
+    }
+
+    var userName = currentRole switch
+    {
+        "Almacenero" => "Luis Quispe Rojas",
+        "Cajero" => "María Fernanda Salazar",
+        _ => "Administrador General"
+    };
+
+    var userLogin = currentRole switch
+    {
+        "Almacenero" => "almacen",
+        "Cajero" => "cajero",
+        _ => "admin"
+    };
+
+    var initials = currentRole switch
+    {
+        "Almacenero" => "LQ",
+        "Cajero" => "MF",
+        _ => "AG"
+    };
+
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Home";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+}
+
+<!DOCTYPE html>
+<html lang="es" class="h-full">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Minimarket.Front</title>
-    <script type="importmap"></script>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <title>@ViewData["Title"] - Minimarket Chininin SAC</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    },
+                    boxShadow: {
+                        card: '0 4px 24px -8px rgb(0 0 0 / 0.06)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Estilos Corporativos Chininin -->
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/Minimarket.Front.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Minimarket.Front</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
+<body class="h-full bg-slate-50 text-slate-900 antialiased font-sans flex">
+
+    <!-- Mobile Drawer Overlay -->
+    <div id="mobileOverlay" class="fixed inset-0 bg-black/40 z-40 hidden lg:hidden transition-opacity" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar Lateral -->
+    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-in-out shrink-0">
+        <div>
+            <!-- Header Marca -->
+            <div class="h-16 flex items-center justify-between px-5 border-b border-slate-100">
+                <a asp-controller="Home" asp-action="Index" class="flex items-center gap-3 no-underline">
+                    <div class="w-10 h-10 rounded-xl bg-brand-600 text-white grid place-items-center shadow-sm shrink-0">
+                        <i data-lucide="store" class="w-5 h-5"></i>
+                    </div>
+                    <div class="leading-tight">
+                        <div class="font-bold text-slate-900 text-base">Chininin</div>
+                        <div class="text-[11px] text-slate-400 font-semibold tracking-wider">MINIMARKET SAC</div>
+                    </div>
+                </a>
+                <button type="button" class="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg" onclick="toggleSidebar()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                    </ul>
+            </div>
+
+            <!-- Navegación Adaptativa por Roles Oficiales (Informe Académico) -->
+            <nav class="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-10rem)]">
+                <!-- Dashboard / Inicio (Todos los roles) -->
+                <a asp-controller="Home" asp-action="Index"
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Home" && currentAction == "Index" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 @(currentController == "Home" && currentAction == "Index" ? "text-brand-600" : "text-slate-400")"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                @if (currentRole == "Administrador" || currentRole == "Cajero")
+                {
+                    <!-- Punto de Venta (POS) -->
+                    <a asp-controller="Pos" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Pos" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="shopping-cart" class="w-4 h-4 @(currentController == "Pos" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Punto de Venta</span>
+                    </a>
+                }
+
+                @if (currentRole == "Administrador" || currentRole == "Almacenero")
+                {
+                    <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Inventario</div>
+                    
+                    <!-- Productos -->
+                    <a asp-controller="Productos" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Productos" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="package" class="w-4 h-4 @(currentController == "Productos" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Productos</span>
+                    </a>
+
+                    <!-- Proveedores -->
+                    <a asp-controller="Proveedores" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Proveedores" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="truck" class="w-4 h-4 @(currentController == "Proveedores" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Proveedores</span>
+                    </a>
+                }
+
+                @if (currentRole == "Administrador" || currentRole == "Cajero")
+                {
+                    <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ventas y Clientes</div>
+
+                    <!-- Clientes -->
+                    <a asp-controller="Clientes" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Clientes" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="users-2" class="w-4 h-4 @(currentController == "Clientes" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Clientes</span>
+                    </a>
+                }
+
+                @if (currentRole == "Administrador")
+                {
+                    <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Administración</div>
+
+                    <!-- Kardex -->
+                    <a asp-controller="Kardex" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Kardex" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="book-open" class="w-4 h-4 @(currentController == "Kardex" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Kardex</span>
+                    </a>
+
+                    <!-- Reportes -->
+                    <a asp-controller="Reportes" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Reportes" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4 @(currentController == "Reportes" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Reportes</span>
+                    </a>
+                }
+            </nav>
+        </div>
+
+        <!-- Footer del Sidebar con Perfil Resumido -->
+        <div class="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold text-xs grid place-items-center shrink-0">
+                        @initials
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-xs font-bold text-slate-800 truncate">@userName</div>
+                        <div class="text-[11px] text-slate-500 truncate">@currentRole</div>
+                    </div>
+                </div>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Simulación Activa">
+                    Fase 2
+                </span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <div class="flex-1 flex flex-col min-w-0 min-h-screen">
+        <!-- Top Navbar con Selector de Roles para Prueba Visual -->
+        <header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+            <div class="flex items-center gap-3">
+                <button type="button" class="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl" onclick="toggleSidebar()">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <!-- Buscador rápido en header -->
+                <div class="relative w-48 sm:w-72 hidden sm:block">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </span>
+                    <input type="text" placeholder="Buscar producto o proveedor..."
+                           class="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition" />
                 </div>
             </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
+
+            <!-- Selector Interactivo de Roles para Probar la Fase 2 -->
+            <div class="flex items-center gap-2 sm:gap-4">
+                <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-medium">
+                    <span class="text-slate-500 px-2 hidden md:inline text-[11px]">Ver como:</span>
+                    <button type="button" onclick="cambiarRol('Administrador')"
+                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Administrador" ? "bg-white text-purple-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                        Admin
+                    </button>
+                    <button type="button" onclick="cambiarRol('Almacenero')"
+                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Almacenero" ? "bg-white text-blue-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                        Almacén
+                    </button>
+                    <button type="button" onclick="cambiarRol('Cajero')"
+                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Cajero" ? "bg-white text-emerald-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                        Cajero
+                    </button>
+                </div>
+
+                <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
+
+                <div class="flex items-center gap-2.5">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-xs font-semibold text-slate-800">@userName</div>
+                        <div class="text-[10px] text-slate-400 font-mono">@userLogin</div>
+                    </div>
+                    <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold text-xs grid place-items-center">
+                        @initials
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Body Render -->
+        <main class="flex-1 p-4 lg:p-6 overflow-x-hidden">
             @RenderBody()
         </main>
+
+        <!-- Footer -->
+        <footer class="py-3 px-6 bg-white border-t border-slate-200/80 text-center text-xs text-slate-400">
+            Minimarket Chininin SAC &copy; 2026 — Arquitectura Cliente-Servidor (.NET 10 + SQL Server)
+        </footer>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - Minimarket.Front - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
-    </footer>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+    <!-- Scripts -->
+    <script>
+        lucide.createIcons();
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('mobileOverlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        function cambiarRol(rol) {
+            document.cookie = "chininin_preview_role=" + rol + "; path=/; max-age=86400";
+            const url = new URL(window.location.href);
+            url.searchParams.set("rol", rol);
+            window.location.href = url.toString();
+        }
+    </script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
