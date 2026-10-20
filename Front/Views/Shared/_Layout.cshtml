@@ -1,31 +1,19 @@
+@using System.Security.Claims
 @{
-    // Obtener rol simulado para evaluación visual de la Fase 2 (vía cookie o query string, default: Administrador)
-    var currentRole = Context.Request.Query["rol"].ToString();
-    if (string.IsNullOrEmpty(currentRole))
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
+    var userName = User.Identity?.Name ?? "Usuario Invitado";
+    var userLogin = User.FindFirstValue(ClaimTypes.GivenName) ?? "invitado";
+    var userRole = User.FindFirstValue(ClaimTypes.Role) ?? "Cajero";
+
+    // Iniciales para avatar
+    var initials = "CH";
+    if (!string.IsNullOrWhiteSpace(userName))
     {
-        currentRole = Context.Request.Cookies["chininin_preview_role"] ?? "Administrador";
+        var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        initials = parts.Length >= 2 
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper() 
+            : parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
     }
-
-    var userName = currentRole switch
-    {
-        "Almacenero" => "Luis Quispe Rojas",
-        "Cajero" => "María Fernanda Salazar",
-        _ => "Administrador General"
-    };
-
-    var userLogin = currentRole switch
-    {
-        "Almacenero" => "almacen",
-        "Cajero" => "cajero",
-        _ => "admin"
-    };
-
-    var initials = currentRole switch
-    {
-        "Almacenero" => "LQ",
-        "Cajero" => "MF",
-        _ => "AG"
-    };
 
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "Home";
     var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
@@ -104,7 +92,7 @@
                 </button>
             </div>
 
-            <!-- Navegación Adaptativa por Roles Oficiales (Informe Académico) -->
+            <!-- Navegación Dinámica según el Rol Autenticado (Claims) -->
             <nav class="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-10rem)]">
                 <!-- Dashboard / Inicio (Todos los roles) -->
                 <a asp-controller="Home" asp-action="Index"
@@ -113,7 +101,7 @@
                     <span>Dashboard</span>
                 </a>
 
-                @if (currentRole == "Administrador" || currentRole == "Cajero")
+                @if (userRole == "Administrador" || userRole == "Cajero")
                 {
                     <!-- Punto de Venta (POS) -->
                     <a asp-controller="Pos" asp-action="Index"
@@ -123,7 +111,7 @@
                     </a>
                 }
 
-                @if (currentRole == "Administrador" || currentRole == "Almacenero")
+                @if (userRole == "Administrador" || userRole == "Almacenero")
                 {
                     <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Inventario</div>
                     
@@ -142,7 +130,7 @@
                     </a>
                 }
 
-                @if (currentRole == "Administrador" || currentRole == "Cajero")
+                @if (userRole == "Administrador" || userRole == "Cajero")
                 {
                     <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ventas y Clientes</div>
 
@@ -154,7 +142,7 @@
                     </a>
                 }
 
-                @if (currentRole == "Administrador")
+                @if (userRole == "Administrador")
                 {
                     <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Administración</div>
 
@@ -175,7 +163,7 @@
             </nav>
         </div>
 
-        <!-- Footer del Sidebar con Perfil Resumido -->
+        <!-- Footer del Sidebar con Perfil Autenticado y Cerrar Sesión -->
         <div class="p-4 border-t border-slate-100 bg-slate-50/50">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 min-w-0">
@@ -184,19 +172,22 @@
                     </div>
                     <div class="min-w-0">
                         <div class="text-xs font-bold text-slate-800 truncate">@userName</div>
-                        <div class="text-[11px] text-slate-500 truncate">@currentRole</div>
+                        <div class="text-[11px] text-slate-500 truncate">@userRole</div>
                     </div>
                 </div>
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800" title="Simulación Activa">
-                    Fase 2
-                </span>
+                <form asp-controller="Account" asp-action="Logout" method="post" class="shrink-0">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" title="Cerrar Sesión" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </form>
             </div>
         </div>
     </aside>
 
     <!-- Contenido Principal -->
     <div class="flex-1 flex flex-col min-w-0 min-h-screen">
-        <!-- Top Navbar con Selector de Roles para Prueba Visual -->
+        <!-- Top Navbar -->
         <header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
             <div class="flex items-center gap-3">
                 <button type="button" class="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl" onclick="toggleSidebar()">
@@ -212,22 +203,31 @@
                 </div>
             </div>
 
-            <!-- Selector Interactivo de Roles para Probar la Fase 2 -->
+            <!-- Información del Usuario Autenticado -->
             <div class="flex items-center gap-2 sm:gap-4">
-                <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-medium">
-                    <span class="text-slate-500 px-2 hidden md:inline text-[11px]">Ver como:</span>
-                    <button type="button" onclick="cambiarRol('Administrador')"
-                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Administrador" ? "bg-white text-purple-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
-                        Admin
-                    </button>
-                    <button type="button" onclick="cambiarRol('Almacenero')"
-                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Almacenero" ? "bg-white text-blue-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
-                        Almacén
-                    </button>
-                    <button type="button" onclick="cambiarRol('Cajero')"
-                            class="px-2.5 py-1 rounded-lg transition @(currentRole == "Cajero" ? "bg-white text-emerald-700 font-bold shadow-sm" : "text-slate-600 hover:text-slate-900")">
-                        Cajero
-                    </button>
+                <div class="flex items-center gap-2">
+                    @if (userRole == "Administrador")
+                    {
+                        <span class="badge-chininin badge-admin">
+                            <i data-lucide="shield" class="w-3 h-3"></i> @userRole
+                        </span>
+                    }
+                    else if (userRole == "Almacenero")
+                    {
+                        <span class="badge-chininin badge-almacen">
+                            <i data-lucide="package" class="w-3 h-3"></i> @userRole
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge-chininin badge-cajero">
+                            <i data-lucide="shopping-cart" class="w-3 h-3"></i> @userRole
+                        </span>
+                    }
+
+                    <span class="badge-chininin bg-emerald-50 text-emerald-700 hidden sm:inline-flex">
+                        <i data-lucide="circle" class="w-2 h-2 fill-current"></i> En Línea
+                    </span>
                 </div>
 
                 <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
@@ -264,13 +264,6 @@
             const overlay = document.getElementById('mobileOverlay');
             sidebar.classList.toggle('-translate-x-full');
             overlay.classList.toggle('hidden');
-        }
-
-        function cambiarRol(rol) {
-            document.cookie = "chininin_preview_role=" + rol + "; path=/; max-age=86400";
-            const url = new URL(window.location.href);
-            url.searchParams.set("rol", rol);
-            window.location.href = url.toString();
         }
     </script>
     @await RenderSectionAsync("Scripts", required: false)

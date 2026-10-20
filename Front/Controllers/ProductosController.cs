@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Minimarket.Front.Models;
 
 namespace Minimarket.Front.Controllers;
 
+[Authorize(Roles = "Administrador,Almacenero")]
 public class ProductosController : Controller
 {
     public IActionResult Index()

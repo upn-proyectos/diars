@@ -2,18 +2,8 @@
 @using System.Security.Claims
 @{
     ViewData["Title"] = "Panel de Control Principal";
-    var userRole = Context.Request.Query["rol"].ToString();
-    if (string.IsNullOrEmpty(userRole))
-    {
-        userRole = Context.Request.Cookies["chininin_preview_role"] ?? "Administrador";
-    }
-
-    var userName = userRole switch
-    {
-        "Almacenero" => "Luis Quispe Rojas",
-        "Cajero" => "María Fernanda Salazar",
-        _ => "Administrador General"
-    };
+    var userRole = User.FindFirstValue(ClaimTypes.Role) ?? "Cajero";
+    var userName = User.Identity?.Name ?? "Usuario";
 }
 
 <div class="space-y-6">
@@ -25,7 +15,7 @@
             </div>
             <h1 class="text-2xl font-bold tracking-tight">¡Hola de nuevo, @userName!</h1>
             <p class="text-emerald-100 text-sm mt-0.5">
-                Sesión activa con privilegios de <strong class="underline decoration-emerald-300">@userRole</strong>.
+                Sesión activa con permisos de <strong class="underline decoration-emerald-300">@userRole</strong>.
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -259,8 +249,8 @@
                     <strong class="text-slate-800">SQL Server (EF Core)</strong>
                 </div>
                 <div class="flex justify-between text-slate-500">
-                    <span>Patrones Activos:</span>
-                    <strong class="text-slate-800">Inyección, Repository</strong>
+                    <span>Seguridad Activa:</span>
+                    <strong class="text-slate-800">Cookie Auth + Claims</strong>
                 </div>
             </div>
         </div>

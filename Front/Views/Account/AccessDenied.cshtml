@@ -1,0 +1,18 @@
+@{
+    ViewData["Title"] = "Acceso Restringido";
+}
+
+<div class="max-w-md mx-auto my-16 text-center card-chininin p-8 space-y-4">
+    <div class="w-16 h-16 mx-auto rounded-full bg-red-50 text-red-600 grid place-items-center">
+        <i data-lucide="shield-alert" class="w-8 h-8"></i>
+    </div>
+    <h2 class="text-2xl font-bold text-slate-800">Acceso Restringido</h2>
+    <p class="text-slate-500 text-sm">
+        Tu rol actual no dispone de los permisos necesarios para acceder a esta sección del sistema.
+    </p>
+    <div class="pt-2">
+        <a asp-controller="Home" asp-action="Index" class="btn-brand-primary">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al Inicio
+        </a>
+    </div>
+</div>
