@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Minimarket.Datos.Context;
+using Minimarket.Datos.Repositories;
 using Minimarket.Negocio.Interfaces;
 using Minimarket.Negocio.Services;
 
@@ -9,8 +10,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<MinimarketDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Inyección de Dependencias para Servicios de Negocio
+// Inyección de Dependencias: Patrón Repository y Servicios de Negocio
+builder.Services.AddScoped<IProductoRepository, ProductoRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProductoService, ProductoService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();

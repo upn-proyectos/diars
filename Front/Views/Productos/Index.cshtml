@@ -1,0 +1,763 @@
+@model Minimarket.Front.Models.ProductosCatalogoViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Catálogo de Productos";
+    var toastExito = TempData["ToastExito"] as string;
+    var toastError = TempData["ToastError"] as string;
+    var inv = CultureInfo.InvariantCulture;
+}
+
+<div class="space-y-6">
+    <!-- Notificaciones Toast Superiores -->
+    @if (!string.IsNullOrWhiteSpace(toastExito))
+    {
+        <div id="toastBanner" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+                <span class="font-medium">@toastExito</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastBanner')?.remove()" class="text-emerald-600 hover:text-emerald-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(toastError))
+    {
+        <div id="toastBannerError" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 shrink-0"></i>
+                <span class="font-medium">@toastError</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastBannerError')?.remove()" class="text-red-600 hover:text-red-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Encabezado Principal -->
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <div class="flex items-center gap-2">
+                <h1 class="text-2xl font-bold text-slate-900">Productos</h1>
+                <span class="badge-chininin bg-brand-50 text-brand-700 border border-brand-200 text-[11px]">
+                    <i data-lucide="database" class="w-3 h-3"></i> Patrón Repository
+                </span>
+            </div>
+            <p class="text-slate-500 text-sm mt-1">
+                <span id="contadorProductos">@Model.TotalProductos</span> productos activos en inventario
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a asp-controller="Categorias" asp-action="Index" class="btn-brand-secondary">
+                <i data-lucide="tags" class="w-4 h-4"></i>
+                <span>Categorías</span>
+            </a>
+            <button type="button" onclick="abrirModalNuevo()" class="btn-brand-primary">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Nuevo producto</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tarjetas Resumen de Inventario -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card-chininin p-4 flex items-center justify-between">
+            <div>
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Catálogo</div>
+                <div class="text-2xl font-extrabold text-slate-900 mt-1">@Model.TotalProductos</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">@Model.Categorias.Count categorías activas</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 grid place-items-center">
+                <i data-lucide="package" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="card-chininin p-4 flex items-center justify-between @(Model.TotalStockBajo > 0 ? "border-amber-200 bg-amber-50/30" : "")">
+            <div>
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Stock Bajo</div>
+                <div class="text-2xl font-extrabold @(Model.TotalStockBajo > 0 ? "text-amber-700" : "text-slate-900") mt-1">@Model.TotalStockBajo</div>
+                <div class="text-[11px] @(Model.TotalStockBajo > 0 ? "text-amber-700 font-medium" : "text-slate-400") mt-0.5">
+                    @(Model.TotalStockBajo > 0 ? "Requieren reposición" : "Sin alertas de stock")
+                </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl @(Model.TotalStockBajo > 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500") grid place-items-center">
+                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="card-chininin p-4 flex items-center justify-between @(Model.TotalPorVencer > 0 ? "border-orange-200 bg-orange-50/20" : "")">
+            <div>
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Por Vencer (&le; 30d)</div>
+                <div class="text-2xl font-extrabold @(Model.TotalPorVencer > 0 ? "text-orange-600" : "text-slate-900") mt-1">@Model.TotalPorVencer</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Control FEFO preventivo</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl @(Model.TotalPorVencer > 0 ? "bg-orange-100 text-orange-600" : "bg-slate-100 text-slate-500") grid place-items-center">
+                <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <div class="card-chininin p-4 flex items-center justify-between">
+            <div>
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Valor en Almacén</div>
+                <div class="text-2xl font-extrabold text-slate-900 mt-1">S/ @Model.ValorTotalInventario.ToString("N2")</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">Valorizado al costo unitario</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 grid place-items-center">
+                <i data-lucide="coins" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros Interactivos (igual que en Productos.tsx) -->
+    <div class="card-chininin p-4 flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex flex-wrap gap-3 items-center flex-1">
+            <!-- Buscador por nombre o código de barras -->
+            <div class="relative flex-1 min-w-[240px]">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                <input id="inputBuscar" type="text" oninput="filtrarTabla()"
+                       placeholder="Buscar por nombre o código de barras..."
+                       class="input-chininin pl-10" />
+            </div>
+
+            <!-- Selector de Categoría -->
+            <select id="selectCategoria" onchange="filtrarTabla()" class="input-chininin !w-auto min-w-[190px]">
+                <option value="all">Todas las categorías</option>
+                @foreach (var cat in Model.Categorias)
+                {
+                    <option value="@cat.Id">@cat.Nombre</option>
+                }
+            </select>
+        </div>
+
+        <!-- Filtros rápidos de estado -->
+        <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            <button type="button" id="btnFiltroTodos" onclick="cambiarEstadoFiltro('all')"
+                    class="px-3 py-1.5 rounded-lg bg-white text-slate-900 shadow-sm transition cursor-pointer">
+                Todos (@Model.TotalProductos)
+            </button>
+            <button type="button" id="btnFiltroBajo" onclick="cambiarEstadoFiltro('bajo')"
+                    class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">
+                Stock Bajo (@Model.TotalStockBajo)
+            </button>
+            <button type="button" id="btnFiltroVence" onclick="cambiarEstadoFiltro('vence')"
+                    class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">
+                Por Vencer (@Model.TotalPorVencer)
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabla de Productos -->
+    <div class="card-chininin overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table-chininin" id="tablaProductos">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Categoría</th>
+                        <th class="text-right">Precio</th>
+                        <th class="text-right">Costo</th>
+                        <th class="text-center">Stock</th>
+                        <th>Vence</th>
+                        <th class="text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyProductos">
+                    @foreach (var p in Model.Productos)
+                    {
+                        var bajo = p.EstaBajoStock;
+                        var porVencer = p.DiasParaVencer.HasValue && p.DiasParaVencer.Value <= 30;
+                        var stockFormateado = p.UnidadMedida == "KG" ? p.Stock.ToString("0.###", inv) : p.Stock.ToString("0.##", inv);
+                        var stockMinFormateado = p.UnidadMedida == "KG" ? p.StockMinimo.ToString("0.###", inv) : p.StockMinimo.ToString("0.##", inv);
+                        var fechaIso = p.FechaVencimiento?.ToString("yyyy-MM-dd") ?? "";
+
+                        // Color por categoría para diferenciación visual
+                        var catBadgeClass = p.CategoriaNombre switch
+                        {
+                            var s when s.Contains("Abarrotes") => "bg-amber-50 text-amber-800 border border-amber-200/60",
+                            var s when s.Contains("Bebidas") => "bg-sky-50 text-sky-700 border border-sky-200/60",
+                            var s when s.Contains("Lácteos") => "bg-indigo-50 text-indigo-700 border border-indigo-200/60",
+                            var s when s.Contains("Verduras") || s.Contains("Frutas") => "bg-emerald-50 text-emerald-700 border border-emerald-200/60",
+                            var s when s.Contains("Limpieza") => "bg-purple-50 text-purple-700 border border-purple-200/60",
+                            _ => "bg-slate-100 text-slate-700"
+                        };
+
+                        <tr class="fila-producto"
+                            data-id="@p.Id"
+                            data-codigo="@p.CodigoBarras.ToLower()"
+                            data-nombre="@p.Nombre.ToLower()"
+                            data-categoria="@p.CategoriaId"
+                            data-bajo="@(bajo ? "1" : "0")"
+                            data-vence="@(porVencer ? "1" : "0")">
+
+                            <td class="font-mono text-xs text-slate-500">@p.CodigoBarras</td>
+
+                            <td>
+                                <div class="font-semibold text-slate-900">@p.Nombre</div>
+                                <div class="text-[11px] text-slate-400">
+                                    Proveedor: <span class="text-slate-600 font-medium">@p.ProveedorNombre</span>
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="badge-chininin @catBadgeClass">
+                                    @p.CategoriaNombre
+                                </span>
+                            </td>
+
+                            <td class="text-right font-bold text-slate-900">
+                                S/ @p.PrecioVenta.ToString("N2")
+                            </td>
+
+                            <td class="text-right text-slate-500 text-sm">
+                                S/ @p.CostoUnitario.ToString("N2")
+                            </td>
+
+                            <td class="text-center">
+                                @if (bajo)
+                                {
+                                    <span class="badge-chininin bg-red-100 text-red-700 border border-red-200" title="Stock mínimo: @stockMinFormateado @p.UnidadMedida">
+                                        <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                                        @stockFormateado @(p.UnidadMedida == "KG" ? "kg" : "und")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge-chininin bg-brand-50 text-brand-700 border border-brand-200/70" title="Stock mínimo: @stockMinFormateado @p.UnidadMedida">
+                                        @stockFormateado @(p.UnidadMedida == "KG" ? "kg" : "und")
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                @if (p.FechaVencimiento.HasValue && p.DiasParaVencer.HasValue)
+                                {
+                                    var dias = p.DiasParaVencer.Value;
+                                    if (dias < 0)
+                                    {
+                                        <span class="badge-chininin bg-red-100 text-red-800">
+                                            @fechaIso · Vencido
+                                        </span>
+                                    }
+                                    else if (dias <= 7)
+                                    {
+                                        <span class="badge-chininin bg-red-100 text-red-700">
+                                            @fechaIso · @(dias)d
+                                        </span>
+                                    }
+                                    else if (dias <= 30)
+                                    {
+                                        <span class="badge-chininin bg-amber-100 text-amber-800">
+                                            @fechaIso · @(dias)d
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-xs text-slate-500">@fechaIso</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-slate-400">—</span>
+                                }
+                            </td>
+
+                            <td class="text-right whitespace-nowrap">
+                                <button type="button"
+                                        title="Ajustar stock"
+                                        class="btn-brand-ghost p-1.5 text-slate-500 hover:text-amber-600"
+                                        onclick="abrirModalAjuste(@p.Id, '@Html.Raw(p.Nombre.Replace("'", "\\'"))', '@stockFormateado', '@(p.UnidadMedida == "KG" ? "kg" : "und")')">
+                                    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                                </button>
+
+                                <button type="button"
+                                        title="Editar producto"
+                                        class="btn-brand-ghost p-1.5 text-slate-500 hover:text-brand-600"
+                                        onclick="abrirModalEditar(@p.Id, '@Html.Raw(p.CodigoBarras.Replace("'", "\\'"))', '@Html.Raw(p.Nombre.Replace("'", "\\'"))', @p.CategoriaId, @(p.ProveedorId?.ToString() ?? "0"), '@p.PrecioVenta.ToString("0.00", inv)', '@p.CostoUnitario.ToString("0.00", inv)', '@stockFormateado', '@stockMinFormateado', '@p.UnidadMedida', '@fechaIso')">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+
+                                <button type="button"
+                                        title="Eliminar producto"
+                                        class="btn-brand-ghost p-1.5 text-slate-500 hover:text-red-600"
+                                        onclick="abrirModalEliminar(@p.Id, '@Html.Raw(p.Nombre.Replace("'", "\\'"))')">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+
+                    <!-- Fila de estado vacío cuando el filtro no arroja coincidencias -->
+                    <tr id="filaSinResultados" class="@(Model.Productos.Count == 0 ? "" : "hidden")">
+                        <td colspan="8" class="text-center py-12">
+                            <i data-lucide="package-open" class="w-9 h-9 text-slate-300 mx-auto mb-2"></i>
+                            <div class="text-slate-400 font-medium">No hay productos que coincidan con la búsqueda</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pie de Tabla -->
+        <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/40">
+            <span>Mostrando <strong id="lblMostrando" class="text-slate-700">@Model.TotalProductos</strong> de <strong>@Model.TotalProductos</strong> productos registrados en SQL Server</span>
+            <span class="font-mono text-[11px] text-slate-400">IProductoRepository &rarr; ProductoService</span>
+        </div>
+    </div>
+</div>
+
+<!-- =======================================================================
+     MODAL 1: CREAR / EDITAR PRODUCTO
+     ======================================================================= -->
+<div id="modalProducto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden place-items-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <h3 id="modalProductoTitulo" class="text-lg font-bold text-slate-900">Nuevo producto</h3>
+            <button type="button" onclick="cerrarModalProducto()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form asp-controller="Productos" asp-action="Guardar" method="post" class="flex-1 overflow-y-auto">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="prodId" name="Id" value="" />
+
+            <div class="p-5 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Nombre -->
+                    <div class="sm:col-span-2">
+                        <label for="prodNombre" class="block text-sm font-medium text-slate-700 mb-1">
+                            Nombre del producto <span class="text-red-500">*</span>
+                        </label>
+                        <input id="prodNombre" name="Nombre" type="text" required
+                               placeholder="Ej. Inca Kola 1.5L No Retornable"
+                               class="input-chininin" />
+                    </div>
+
+                    <!-- Código de barras -->
+                    <div>
+                        <label for="prodCodigo" class="block text-sm font-medium text-slate-700 mb-1">
+                            Código de barras <span class="text-red-500">*</span>
+                        </label>
+                        <input id="prodCodigo" name="CodigoBarras" type="text" required
+                               placeholder="7750182001234"
+                               class="input-chininin font-mono" />
+                    </div>
+
+                    <!-- Categoría -->
+                    <div>
+                        <label for="prodCategoria" class="block text-sm font-medium text-slate-700 mb-1">
+                            Categoría <span class="text-red-500">*</span>
+                        </label>
+                        <select id="prodCategoria" name="CategoriaId" required class="input-chininin">
+                            @foreach (var cat in Model.Categorias)
+                            {
+                                <option value="@cat.Id">@cat.Nombre</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Proveedor habitual -->
+                    <div>
+                        <label for="prodProveedor" class="block text-sm font-medium text-slate-700 mb-1">
+                            Proveedor habitual
+                        </label>
+                        <select id="prodProveedor" name="ProveedorId" class="input-chininin">
+                            <option value="">Sin proveedor asignado</option>
+                            @foreach (var prov in Model.Proveedores)
+                            {
+                                <option value="@prov.Id">@prov.NombreMostrar (@prov.Ruc)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Unidad de medida -->
+                    <div>
+                        <label for="prodUnidad" class="block text-sm font-medium text-slate-700 mb-1">
+                            Unidad de medida
+                        </label>
+                        <select id="prodUnidad" name="UnidadMedida" class="input-chininin">
+                            <option value="UNIDAD">UNIDAD (und)</option>
+                            <option value="KG">KG (kilogramo a granel)</option>
+                        </select>
+                    </div>
+
+                    <!-- Precio de Venta -->
+                    <div>
+                        <label for="prodPrecio" class="block text-sm font-medium text-slate-700 mb-1">
+                            Precio de venta (S/) <span class="text-red-500">*</span>
+                        </label>
+                        <input id="prodPrecio" name="PrecioVenta" type="number" step="0.01" min="0" required
+                               oninput="calcularMargenEnVivo()"
+                               placeholder="0.00" class="input-chininin" />
+                    </div>
+
+                    <!-- Costo Unitario -->
+                    <div>
+                        <label for="prodCosto" class="block text-sm font-medium text-slate-700 mb-1">
+                            Costo unitario (S/) <span class="text-red-500">*</span>
+                        </label>
+                        <input id="prodCosto" name="CostoUnitario" type="number" step="0.01" min="0" required
+                               oninput="calcularMargenEnVivo()"
+                               placeholder="0.00" class="input-chininin" />
+                    </div>
+
+                    <!-- Stock Actual -->
+                    <div>
+                        <label for="prodStock" class="block text-sm font-medium text-slate-700 mb-1">
+                            Stock actual
+                        </label>
+                        <input id="prodStock" name="Stock" type="number" step="0.001" min="0" required
+                               placeholder="0" class="input-chininin" />
+                    </div>
+
+                    <!-- Stock Mínimo -->
+                    <div>
+                        <label for="prodStockMin" class="block text-sm font-medium text-slate-700 mb-1">
+                            Stock mínimo (Alerta)
+                        </label>
+                        <input id="prodStockMin" name="StockMinimo" type="number" step="0.001" min="0" required
+                               placeholder="5" class="input-chininin" />
+                    </div>
+
+                    <!-- Fecha de Vencimiento -->
+                    <div class="sm:col-span-2">
+                        <label for="prodVencimiento" class="block text-sm font-medium text-slate-700 mb-1">
+                            Fecha de vencimiento (Opcional)
+                        </label>
+                        <input id="prodVencimiento" name="FechaVencimiento" type="date" class="input-chininin" />
+                    </div>
+                </div>
+
+                <!-- Calculadora de Margen Estimado en Vivo -->
+                <div id="boxMargen" class="p-3.5 bg-brand-50 border border-brand-200/70 rounded-xl flex items-center justify-between text-sm hidden">
+                    <span class="text-slate-600 font-medium">Margen comercial estimado</span>
+                    <span id="txtMargen" class="font-bold text-brand-700">0.0% · S/ 0.00 por unidad</span>
+                </div>
+            </div>
+
+            <div class="flex gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button type="button" onclick="cerrarModalProducto()" class="btn-brand-secondary flex-1">
+                    Cancelar
+                </button>
+                <button type="submit" id="btnGuardarProducto" class="btn-brand-primary flex-1">
+                    Guardar producto
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =======================================================================
+     MODAL 2: AJUSTAR STOCK (CON REGISTRO EN KARDEX)
+     ======================================================================= -->
+<div id="modalAjuste" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden place-items-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5 text-amber-500"></i>
+                <h3 class="text-lg font-bold text-slate-900">Ajustar stock</h3>
+            </div>
+            <button type="button" onclick="cerrarModalAjuste()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form asp-controller="Productos" asp-action="AjustarStock" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="ajusteProductoId" name="ProductoId" value="" />
+
+            <div class="p-5 space-y-4">
+                <div class="p-3 bg-slate-50 rounded-xl text-sm">
+                    <span class="text-slate-500">Producto: </span>
+                    <span id="ajusteNombreProducto" class="font-semibold text-slate-900"></span>
+                </div>
+
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-500">Stock actual</span>
+                    <span class="font-bold text-slate-900 text-lg">
+                        <span id="ajusteStockActual">0</span>
+                        <span id="ajusteUnidad" class="text-sm font-normal text-slate-500">und</span>
+                    </span>
+                </div>
+
+                <div>
+                    <label for="ajusteNuevoStock" class="block text-sm font-medium text-slate-700 mb-1">
+                        Nuevo stock físico <span class="text-red-500">*</span>
+                    </label>
+                    <input id="ajusteNuevoStock" name="NuevoStock" type="number" step="0.001" min="0" required
+                           oninput="calcularDiferenciaAjuste()"
+                           class="input-chininin" />
+                    <p id="ajusteDiferenciaTexto" class="text-xs mt-1 font-semibold hidden"></p>
+                </div>
+
+                <div>
+                    <label for="ajusteMotivo" class="block text-sm font-medium text-slate-700 mb-1">
+                        Motivo de auditoría (Kardex)
+                    </label>
+                    <select id="ajusteMotivo" name="Motivo" onchange="verificarMotivoOtro()" class="input-chininin">
+                        <option value="Inventario físico">Inventario físico</option>
+                        <option value="Compra en mercado">Compra en mercado</option>
+                        <option value="Merma detectada">Merma detectada</option>
+                        <option value="Producto dañado">Producto dañado</option>
+                        <option value="Corrección de datos">Corrección de datos</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                    <input id="ajusteMotivoOtro" name="MotivoOtro" type="text"
+                           placeholder="Describe el motivo..."
+                           class="input-chininin mt-2 hidden" />
+                </div>
+            </div>
+
+            <div class="flex gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button type="button" onclick="cerrarModalAjuste()" class="btn-brand-secondary flex-1">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn-brand-primary flex-1">
+                    Guardar ajuste
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =======================================================================
+     MODAL 3: CONFIRMAR ELIMINACIÓN
+     ======================================================================= -->
+<div id="modalEliminar" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden place-items-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <div class="w-12 h-12 bg-red-100 rounded-full grid place-items-center mx-auto mb-4">
+            <i data-lucide="trash-2" class="w-6 h-6 text-red-600"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900 mb-1">¿Retirar producto?</h3>
+        <p class="text-sm text-slate-500 mb-6">
+            Se retirará <strong id="eliminarNombreProducto" class="text-slate-800"></strong> del catálogo activo.
+        </p>
+
+        <form asp-controller="Productos" asp-action="Eliminar" method="post" class="flex gap-3">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="eliminarProductoId" name="id" value="" />
+            <button type="button" onclick="cerrarModalEliminar()" class="btn-brand-secondary flex-1">
+                Cancelar
+            </button>
+            <button type="submit" class="btn-brand-primary !bg-red-600 hover:!bg-red-700 flex-1">
+                Sí, retirar
+            </button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let estadoFiltroActual = 'all';
+        let stockBaseAjuste = 0;
+        let unidadBaseAjuste = 'und';
+
+        function cambiarEstadoFiltro(nuevoEstado) {
+            estadoFiltroActual = nuevoEstado;
+
+            const botones = {
+                'all': document.getElementById('btnFiltroTodos'),
+                'bajo': document.getElementById('btnFiltroBajo'),
+                'vence': document.getElementById('btnFiltroVence')
+            };
+
+            Object.keys(botones).forEach(k => {
+                if (k === nuevoEstado) {
+                    botones[k].className = 'px-3 py-1.5 rounded-lg bg-white text-slate-900 shadow-sm transition cursor-pointer';
+                } else {
+                    botones[k].className = 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer';
+                }
+            });
+
+            filtrarTabla();
+        }
+
+        function filtrarTabla() {
+            const q = (document.getElementById('inputBuscar').value || '').trim().toLowerCase();
+            const cat = document.getElementById('selectCategoria').value;
+            const filas = document.querySelectorAll('.fila-producto');
+            let visibles = 0;
+
+            filas.forEach(fila => {
+                const nombre = fila.getAttribute('data-nombre') || '';
+                const codigo = fila.getAttribute('data-codigo') || '';
+                const categoria = fila.getAttribute('data-categoria') || '';
+                const bajo = fila.getAttribute('data-bajo') === '1';
+                const vence = fila.getAttribute('data-vence') === '1';
+
+                const coincideTexto = q === '' || nombre.includes(q) || codigo.includes(q);
+                const coincideCat = cat === 'all' || categoria === cat;
+                const coincideEstado =
+                    estadoFiltroActual === 'all' ||
+                    (estadoFiltroActual === 'bajo' && bajo) ||
+                    (estadoFiltroActual === 'vence' && vence);
+
+                if (coincideTexto && coincideCat && coincideEstado) {
+                    fila.classList.remove('hidden');
+                    visibles++;
+                } else {
+                    fila.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('lblMostrando').textContent = visibles;
+            const filaVacia = document.getElementById('filaSinResultados');
+            if (visibles === 0) {
+                filaVacia.classList.remove('hidden');
+            } else {
+                filaVacia.classList.add('hidden');
+            }
+        }
+
+        // Modal Crear / Editar
+        function abrirModalNuevo() {
+            document.getElementById('modalProductoTitulo').textContent = 'Nuevo producto';
+            document.getElementById('btnGuardarProducto').textContent = 'Crear producto';
+            document.getElementById('prodId').value = '';
+            document.getElementById('prodCodigo').value = '';
+            document.getElementById('prodNombre').value = '';
+            document.getElementById('prodProveedor').value = '';
+            document.getElementById('prodUnidad').value = 'UNIDAD';
+            document.getElementById('prodPrecio').value = '';
+            document.getElementById('prodCosto').value = '';
+            document.getElementById('prodStock').value = '0';
+            document.getElementById('prodStockMin').value = '5';
+            document.getElementById('prodVencimiento').value = '';
+            document.getElementById('boxMargen').classList.add('hidden');
+
+            const modal = document.getElementById('modalProducto');
+            modal.classList.remove('hidden');
+            modal.classList.add('grid');
+            document.getElementById('prodNombre').focus();
+        }
+
+        function abrirModalEditar(id, codigo, nombre, categoriaId, proveedorId, precio, costo, stock, stockMin, unidad, vencimiento) {
+            document.getElementById('modalProductoTitulo').textContent = 'Editar producto';
+            document.getElementById('btnGuardarProducto').textContent = 'Guardar cambios';
+            document.getElementById('prodId').value = id;
+            document.getElementById('prodCodigo').value = codigo;
+            document.getElementById('prodNombre').value = nombre;
+            document.getElementById('prodCategoria').value = categoriaId;
+            document.getElementById('prodProveedor').value = proveedorId > 0 ? proveedorId : '';
+            document.getElementById('prodUnidad').value = unidad;
+            document.getElementById('prodPrecio').value = precio;
+            document.getElementById('prodCosto').value = costo;
+            document.getElementById('prodStock').value = stock;
+            document.getElementById('prodStockMin').value = stockMin;
+            document.getElementById('prodVencimiento').value = vencimiento || '';
+
+            calcularMargenEnVivo();
+
+            const modal = document.getElementById('modalProducto');
+            modal.classList.remove('hidden');
+            modal.classList.add('grid');
+        }
+
+        function cerrarModalProducto() {
+            const modal = document.getElementById('modalProducto');
+            modal.classList.add('hidden');
+            modal.classList.remove('grid');
+        }
+
+        function calcularMargenEnVivo() {
+            const precio = parseFloat(document.getElementById('prodPrecio').value);
+            const costo = parseFloat(document.getElementById('prodCosto').value);
+            const box = document.getElementById('boxMargen');
+            const txt = document.getElementById('txtMargen');
+
+            if (!isNaN(precio) && !isNaN(costo) && costo > 0) {
+                const pct = (((precio - costo) / costo) * 100).toFixed(1);
+                const ganancia = (precio - costo).toFixed(2);
+                txt.textContent = `${pct}% · S/ ${ganancia} por unidad`;
+                box.classList.remove('hidden');
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
+        // Modal Ajustar Stock
+        function abrirModalAjuste(id, nombre, stockActual, unidad) {
+            stockBaseAjuste = parseFloat(stockActual) || 0;
+            unidadBaseAjuste = unidad;
+
+            document.getElementById('ajusteProductoId').value = id;
+            document.getElementById('ajusteNombreProducto').textContent = nombre;
+            document.getElementById('ajusteStockActual').textContent = stockActual;
+            document.getElementById('ajusteUnidad').textContent = unidad;
+            document.getElementById('ajusteNuevoStock').value = stockActual;
+            document.getElementById('ajusteMotivo').value = 'Inventario físico';
+            document.getElementById('ajusteMotivoOtro').value = '';
+            document.getElementById('ajusteMotivoOtro').classList.add('hidden');
+            document.getElementById('ajusteDiferenciaTexto').classList.add('hidden');
+
+            const modal = document.getElementById('modalAjuste');
+            modal.classList.remove('hidden');
+            modal.classList.add('grid');
+            document.getElementById('ajusteNuevoStock').focus();
+        }
+
+        function cerrarModalAjuste() {
+            const modal = document.getElementById('modalAjuste');
+            modal.classList.add('hidden');
+            modal.classList.remove('grid');
+        }
+
+        function calcularDiferenciaAjuste() {
+            const nuevo = parseFloat(document.getElementById('ajusteNuevoStock').value);
+            const lbl = document.getElementById('ajusteDiferenciaTexto');
+
+            if (isNaN(nuevo) || nuevo === stockBaseAjuste) {
+                lbl.classList.add('hidden');
+                return;
+            }
+
+            const diff = +(nuevo - stockBaseAjuste).toFixed(3);
+            lbl.classList.remove('hidden');
+            if (diff > 0) {
+                lbl.className = 'text-xs mt-1 font-semibold text-brand-600';
+                lbl.textContent = `▲ +${diff} ${unidadBaseAjuste} (Entrada en Kardex)`;
+            } else {
+                lbl.className = 'text-xs mt-1 font-semibold text-red-600';
+                lbl.textContent = `▼ ${diff} ${unidadBaseAjuste} (Salida en Kardex)`;
+            }
+        }
+
+        function verificarMotivoOtro() {
+            const motivo = document.getElementById('ajusteMotivo').value;
+            const inputOtro = document.getElementById('ajusteMotivoOtro');
+            if (motivo === 'Otro') {
+                inputOtro.classList.remove('hidden');
+                inputOtro.focus();
+            } else {
+                inputOtro.classList.add('hidden');
+            }
+        }
+
+        // Modal Eliminar
+        function abrirModalEliminar(id, nombre) {
+            document.getElementById('eliminarProductoId').value = id;
+            document.getElementById('eliminarNombreProducto').textContent = nombre;
+            const modal = document.getElementById('modalEliminar');
+            modal.classList.remove('hidden');
+            modal.classList.add('grid');
+        }
+
+        function cerrarModalEliminar() {
+            const modal = document.getElementById('modalEliminar');
+            modal.classList.add('hidden');
+            modal.classList.remove('grid');
+        }
+
+        // Cerrar modales con tecla Escape
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                cerrarModalProducto();
+                cerrarModalAjuste();
+                cerrarModalEliminar();
+            }
+        });
+    </script>
+}
