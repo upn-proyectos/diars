@@ -110,6 +110,34 @@ public class ProductosController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    [HttpPost]
+    public async Task<IActionResult> CrearCategoriaRapida([FromBody] CategoriaGuardarDto dto)
+    {
+        try
+        {
+            dto.Id = null;
+            var resultado = await _productoService.GuardarCategoriaAsync(dto);
+            if (!resultado.Exito)
+                return BadRequest(new { exito = false, mensaje = resultado.Mensaje });
+
+            var categorias = await _productoService.ListarCategoriasAsync();
+            var creada = categorias.FirstOrDefault(c =>
+                string.Equals(c.Nombre, dto.Nombre.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            return Ok(new
+            {
+                exito = true,
+                mensaje = resultado.Mensaje,
+                id = creada?.Id ?? 0,
+                nombre = creada?.Nombre ?? dto.Nombre.Trim()
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { exito = false, mensaje = $"Error al crear categoría: {ex.Message}" });
+        }
+    }
+
     private static ProductosCatalogoViewModel ConstruirRespaldoDemo()
     {
         return new ProductosCatalogoViewModel

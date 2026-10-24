@@ -346,17 +346,58 @@
                                class="input-chininin font-mono" />
                     </div>
 
-                    <!-- Categoría -->
+                    <!-- Categoría + Opción Rápida para Crear Categoría sin salir -->
                     <div>
-                        <label for="prodCategoria" class="block text-sm font-medium text-slate-700 mb-1">
-                            Categoría <span class="text-red-500">*</span>
-                        </label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="prodCategoria" class="block text-sm font-medium text-slate-700">
+                                Categoría <span class="text-red-500">*</span>
+                            </label>
+                            <button type="button" onclick="togglePanelNuevaCategoriaRapida()"
+                                    class="text-xs font-semibold text-brand-600 hover:text-brand-700 inline-flex items-center gap-1 cursor-pointer">
+                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                                <span>Nueva categoría</span>
+                            </button>
+                        </div>
                         <select id="prodCategoria" name="CategoriaId" required class="input-chininin">
                             @foreach (var cat in Model.Categorias)
                             {
                                 <option value="@cat.Id">@cat.Nombre</option>
                             }
                         </select>
+                        <p id="feedbackCatRapidaExito" class="text-xs text-emerald-700 font-semibold mt-1 hidden"></p>
+                    </div>
+
+                    <!-- Mini-panel inline para crear categoría sin salir del modal de producto -->
+                    <div id="panelNuevaCategoriaRapida" class="sm:col-span-2 p-3.5 rounded-xl bg-slate-50 border border-brand-200 space-y-2.5 hidden">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="tags" class="w-3.5 h-3.5 text-brand-600"></i> Crear categoría rápida
+                            </span>
+                            <button type="button" onclick="togglePanelNuevaCategoriaRapida(false)" class="text-slate-400 hover:text-slate-600">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <input id="rapidaCatNombre" type="text"
+                                   placeholder="Nombre (ej. Heladería, Bazar...)"
+                                   class="input-chininin !py-1.5 text-xs" />
+                            <input id="rapidaCatDescripcion" type="text"
+                                   placeholder="Descripción opcional..."
+                                   class="input-chininin !py-1.5 text-xs" />
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span id="feedbackCatRapidaError" class="text-xs text-red-600 font-medium"></span>
+                            <div class="flex items-center gap-2 ml-auto">
+                                <button type="button" onclick="togglePanelNuevaCategoriaRapida(false)"
+                                        class="btn-brand-secondary !py-1.5 !px-3 !text-xs">
+                                    Cancelar
+                                </button>
+                                <button type="button" id="btnGuardarCatRapida" onclick="guardarCategoriaRapida()"
+                                        class="btn-brand-primary !py-1.5 !px-3 !text-xs">
+                                    Crear y seleccionar
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Proveedor habitual -->
@@ -660,6 +701,88 @@
             const modal = document.getElementById('modalProducto');
             modal.classList.add('hidden');
             modal.classList.remove('grid');
+            togglePanelNuevaCategoriaRapida(false);
+            document.getElementById('feedbackCatRapidaExito').classList.add('hidden');
+        }
+
+        function togglePanelNuevaCategoriaRapida(forzarEstado) {
+            const panel = document.getElementById('panelNuevaCategoriaRapida');
+            const err = document.getElementById('feedbackCatRapidaError');
+            err.textContent = '';
+
+            const mostrar = typeof forzarEstado === 'boolean'
+                ? forzarEstado
+                : panel.classList.contains('hidden');
+
+            if (mostrar) {
+                panel.classList.remove('hidden');
+                document.getElementById('rapidaCatNombre').value = '';
+                document.getElementById('rapidaCatDescripcion').value = '';
+                document.getElementById('rapidaCatNombre').focus();
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        async function guardarCategoriaRapida() {
+            const inputNombre = document.getElementById('rapidaCatNombre');
+            const inputDesc = document.getElementById('rapidaCatDescripcion');
+            const err = document.getElementById('feedbackCatRapidaError');
+            const exitoLbl = document.getElementById('feedbackCatRapidaExito');
+            const btn = document.getElementById('btnGuardarCatRapida');
+
+            const nombre = (inputNombre.value || '').trim();
+            const descripcion = (inputDesc.value || '').trim();
+
+            if (nombre.length < 3) {
+                err.textContent = 'El nombre debe tener al menos 3 caracteres.';
+                inputNombre.focus();
+                return;
+            }
+
+            err.textContent = '';
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+
+            try {
+                const resp = await fetch('/Productos/CrearCategoriaRapida', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, descripcion })
+                });
+                const data = await resp.json();
+
+                if (!resp.ok || !data.exito) {
+                    err.textContent = data.mensaje || 'No se pudo crear la categoría.';
+                    return;
+                }
+
+                // Agregar al selector del modal y seleccionarla automáticamente
+                const selectModal = document.getElementById('prodCategoria');
+                const optModal = document.createElement('option');
+                optModal.value = data.id;
+                optModal.textContent = data.nombre;
+                selectModal.appendChild(optModal);
+                selectModal.value = data.id;
+
+                // Agregar también al filtro de categorías de la tabla principal
+                const selectFiltro = document.getElementById('selectCategoria');
+                if (selectFiltro) {
+                    const optFiltro = document.createElement('option');
+                    optFiltro.value = data.id;
+                    optFiltro.textContent = data.nombre;
+                    selectFiltro.appendChild(optFiltro);
+                }
+
+                togglePanelNuevaCategoriaRapida(false);
+                exitoLbl.textContent = `✓ Categoría "${data.nombre}" creada y seleccionada`;
+                exitoLbl.classList.remove('hidden');
+            } catch (e) {
+                err.textContent = 'Error de conexión al guardar la categoría.';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Crear y seleccionar';
+            }
         }
 
         function calcularMargenEnVivo() {

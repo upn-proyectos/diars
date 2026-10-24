@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Minimarket.Datos.Context;
 using Minimarket.Datos.Repositories;
 using Minimarket.Negocio.Interfaces;
+using Minimarket.Negocio.Patterns.Adapter;
 using Minimarket.Negocio.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,10 +11,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<MinimarketDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Inyección de Dependencias: Patrón Repository y Servicios de Negocio
+// Inyección de Dependencias: Patrón Repository, Patrón Adapter y Servicios de Negocio
 builder.Services.AddScoped<IProductoRepository, ProductoRepository>();
+builder.Services.AddScoped<IProveedorRepository, ProveedorRepository>();
+builder.Services.AddSingleton<SunatReniecMotorExterno>();
+builder.Services.AddScoped<IValidadorDocumentoAdapter, ValidadorDocumentoPeruAdapter>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
+builder.Services.AddScoped<IProveedorService, ProveedorService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
