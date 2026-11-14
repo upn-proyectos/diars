@@ -4,6 +4,8 @@ using Minimarket.Datos.Context;
 using Minimarket.Datos.Repositories;
 using Minimarket.Negocio.Interfaces;
 using Minimarket.Negocio.Patterns.Adapter;
+using Minimarket.Negocio.Patterns.Singleton;
+using Minimarket.Negocio.Patterns.Strategy;
 using Minimarket.Negocio.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,14 +14,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<MinimarketDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2. Inyección de Dependencias (Patrón Repository + Patrón Adapter + Servicios de Negocio)
+// 2. Inyección de Dependencias (Patrón Repository + Patrón Adapter + Patrón Singleton + Patrón Strategy + Servicios)
 builder.Services.AddScoped<IProductoRepository, ProductoRepository>();
 builder.Services.AddScoped<IProveedorRepository, ProveedorRepository>();
+builder.Services.AddScoped<IClienteRepository, ClienteRepository>();
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<IVentaRepository, VentaRepository>();
+
 builder.Services.AddSingleton<SunatReniecMotorExterno>();
+builder.Services.AddSingleton(_ => ConfiguracionTiendaSingleton.Instancia);
+builder.Services.AddScoped<PagoStrategyContext>();
 builder.Services.AddScoped<IValidadorDocumentoAdapter, ValidadorDocumentoPeruAdapter>();
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
 builder.Services.AddScoped<IProveedorService, ProveedorService>();
+builder.Services.AddScoped<IClienteService, ClienteService>();
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<IVentaService, VentaService>();
 
 // 3. Autenticación Basada en Cookies para Sesión Web Segura
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

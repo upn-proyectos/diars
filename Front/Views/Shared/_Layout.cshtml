@@ -137,6 +137,16 @@
                     </a>
                 }
 
+                @if (userRole == "Administrador" || userRole == "Almacenero")
+                {
+                    <!-- Kardex -->
+                    <a asp-controller="Kardex" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Kardex" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="book-open" class="w-4 h-4 @(currentController == "Kardex" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Kardex</span>
+                    </a>
+                }
+
                 @if (userRole == "Administrador" || userRole == "Cajero")
                 {
                     <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ventas y Clientes</div>
@@ -153,11 +163,11 @@
                 {
                     <div class="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Administración</div>
 
-                    <!-- Kardex -->
-                    <a asp-controller="Kardex" asp-action="Index"
-                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Kardex" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
-                        <i data-lucide="book-open" class="w-4 h-4 @(currentController == "Kardex" ? "text-brand-600" : "text-slate-400")"></i>
-                        <span>Kardex</span>
+                    <!-- Usuarios y Roles -->
+                    <a asp-controller="Usuarios" asp-action="Index"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition @(currentController == "Usuarios" ? "bg-brand-50 text-brand-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")">
+                        <i data-lucide="user-cog" class="w-4 h-4 @(currentController == "Usuarios" ? "text-brand-600" : "text-slate-400")"></i>
+                        <span>Usuarios y Roles</span>
                     </a>
 
                     <!-- Reportes -->

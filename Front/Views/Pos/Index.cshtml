@@ -1,0 +1,882 @@
+@model Minimarket.Front.Models.PosViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Punto de Venta (POS)";
+    var toastExito = TempData["ToastExito"] as string;
+    var toastError = TempData["ToastError"] as string;
+    var montoRecibidoBoleta = TempData["MontoRecibidoBoleta"] as string;
+    var vueltoBoleta = TempData["VueltoBoleta"] as string;
+    var referenciaBoleta = TempData["ReferenciaBoleta"] as string;
+    var tasaIgv = Model.Configuracion.TasaIgv > 0 ? Model.Configuracion.TasaIgv : 0.18m;
+}
+
+<div class="space-y-5">
+    <!-- Notificaciones Toast -->
+    @if (!string.IsNullOrWhiteSpace(toastExito))
+    {
+        <div id="toastPosExito" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+                <span class="font-medium">@toastExito</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastPosExito')?.remove()" class="text-emerald-600 hover:text-emerald-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(toastError))
+    {
+        <div id="toastPosError" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 shrink-0"></i>
+                <span class="font-medium">@toastError</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastPosError')?.remove()" class="text-red-600 hover:text-red-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Barra Superior Informativa (Patrones Singleton + Strategy) -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-2xl font-bold text-slate-900">Punto de Venta</h1>
+                <span class="badge-chininin bg-brand-50 text-brand-700 border border-brand-200 text-[11px]">
+                    <i data-lucide="git-branch" class="w-3 h-3"></i> Patrón Strategy (Pagos)
+                </span>
+                <span class="badge-chininin bg-purple-50 text-purple-700 border border-purple-200 text-[11px]">
+                    <i data-lucide="cpu" class="w-3 h-3"></i> Patrón Singleton (@Model.Configuracion.ProximoComprobante · IGV @((tasaIgv * 100).ToString("0"))%)
+                </span>
+            </div>
+            <p class="text-slate-500 text-xs mt-1">
+                Escanea el código de barras o haz clic en las tarjetas para agregar productos al carrito
+            </p>
+        </div>
+
+        <button type="button" onclick="abrirModalHistorialReciente()" class="btn-brand-secondary text-xs">
+            <i data-lucide="receipt" class="w-4 h-4 text-slate-500"></i>
+            <span>Boletas recientes (@Model.VentasRecientes.Count)</span>
+        </button>
+    </div>
+
+    <!-- Layout Principal de 2 Columnas (Con contención estricta minmax(0,1fr) + min-w-0) -->
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px] xl:grid-cols-[minmax(0,1fr)_390px] gap-5 items-start w-full max-w-full">
+        <!-- Columna Izquierda: Buscador + Filtro de Categorías + Grilla de Productos -->
+        <div class="space-y-4 min-w-0 max-w-full overflow-hidden">
+            <div class="card-chininin p-4 min-w-0 max-w-full overflow-hidden">
+                <div class="relative">
+                    <i data-lucide="barcode" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-brand-600 pointer-events-none"></i>
+                    <input id="inputBuscarPos" type="text"
+                           oninput="manejarBusquedaPos(this.value)"
+                           onkeydown="if(event.key==='Enter'){ event.preventDefault(); intentarEscanearExacto(); }"
+                           placeholder="Escanear código de barras o buscar producto por nombre..."
+                           class="input-chininin pl-12 py-3.5 text-base font-medium w-full"
+                           autofocus />
+                </div>
+
+                <!-- Píldoras de Categorías (Scroll horizontal contenido dentro de la tarjeta) -->
+                <div class="flex gap-2 mt-3 overflow-x-auto pb-1.5 w-full max-w-full">
+                    <button type="button"
+                            onclick="filtrarCategoriaPos(0)"
+                            id="pillCat_0"
+                            class="pill-cat-pos shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition bg-brand-600 text-white cursor-pointer">
+                        Todos (@Model.Productos.Count)
+                    </button>
+                    @foreach (var cat in Model.Categorias)
+                    {
+                        <button type="button"
+                                onclick="filtrarCategoriaPos(@cat.Id)"
+                                id="pillCat_@cat.Id"
+                                class="pill-cat-pos shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            @cat.Nombre
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Grilla de Tarjetas de Productos -->
+            <div class="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3 max-h-[calc(100vh-16rem)] overflow-y-auto pr-1 min-w-0" id="gridProductosPos">
+                @foreach (var p in Model.Productos)
+                {
+                    var sinStock = p.Stock <= 0;
+                    var vencido = p.EstadoVencimiento == "Vencido" || p.EstadoVencimiento == "VENCIDO";
+                    var bloqueado = sinStock || vencido;
+                    var busqueda = $"{p.Nombre} {p.CodigoBarras} {p.CategoriaNombre}".ToLower();
+
+                    <button type="button"
+                            id="cardProd_@p.Id"
+                            data-id="@p.Id"
+                            data-cat="@p.CategoriaId"
+                            data-codigo="@(p.CodigoBarras ?? "")"
+                            data-busqueda="@busqueda"
+                            onclick="agregarAlCarrito(@p.Id)"
+                            disabled="@bloqueado"
+                            class="tarjeta-producto-pos card-chininin p-3.5 text-left transition flex flex-col justify-between min-w-0 overflow-hidden @(bloqueado ? "opacity-50 cursor-not-allowed" : "hover:border-brand-400 hover:shadow-md cursor-pointer")">
+                        <div class="min-w-0">
+                            <div class="flex items-center justify-between gap-1.5 min-w-0">
+                                <span class="badge-chininin bg-slate-100 text-slate-600 text-[10px] truncate max-w-[60%]">
+                                    @p.CategoriaNombre
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(p.CodigoBarras))
+                                {
+                                    <span class="text-[10px] font-mono text-slate-400 truncate">@p.CodigoBarras</span>
+                                }
+                            </div>
+                            <div class="mt-2 font-semibold text-slate-900 text-sm leading-snug line-clamp-2 min-h-[2.5rem] break-words">
+                                @p.Nombre
+                            </div>
+                        </div>
+
+                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-end justify-between gap-2">
+                            <div class="text-lg font-bold @(bloqueado ? "text-slate-400" : "text-brand-700")">
+                                S/ @p.PrecioVenta.ToString("0.00")
+                            </div>
+                            <div class="text-[11px] font-semibold shrink-0 @(sinStock || vencido ? "text-red-600" : p.EstaBajoStock ? "text-amber-600" : "text-slate-500")">
+                                @if (vencido)
+                                {
+                                    <span>Vencido</span>
+                                }
+                                else if (sinStock)
+                                {
+                                    <span>Sin stock</span>
+                                }
+                                else
+                                {
+                                    <span>@p.Stock.ToString("0.###") @(p.UnidadMedida == "KG" ? "kg" : "und")</span>
+                                }
+                            </div>
+                        </div>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Columna Derecha: Carrito de Venta Actual -->
+        <div id="panelCarritoPos" class="card-chininin flex flex-col lg:sticky lg:top-20 min-w-0 w-full">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-lg">Venta actual</h3>
+                    <p class="text-xs text-slate-500">Comprobante: <span class="font-mono font-semibold text-slate-700">@Model.Configuracion.ProximoComprobante</span></p>
+                </div>
+                <button type="button" id="btnVaciarCarrito" onclick="vaciarCarrito()" class="hidden text-xs text-red-600 hover:text-red-700 font-semibold cursor-pointer">
+                    Vaciar
+                </button>
+            </div>
+
+            <!-- Alerta de Stock Insuficiente -->
+            <div id="alertaStockPos" class="hidden mx-4 mt-3 items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-3 py-2.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                <span id="txtAlertaStockPos"></span>
+            </div>
+
+            <!-- Lista de Ítems en el Carrito -->
+            <div id="contenedorItemsCarrito" class="p-3 space-y-2 max-h-[360px] overflow-y-auto">
+                <div id="estadoCarritoVacio" class="text-center text-slate-400 py-12 text-sm">
+                    <i data-lucide="shopping-cart" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+                    <p>El carrito está vacío</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Selecciona productos del catálogo para comenzar</p>
+                </div>
+            </div>
+
+            <!-- Resumen Tributario y Botón Cobrar -->
+            <div class="p-5 border-t border-slate-100 space-y-2 bg-slate-50/60 rounded-b-2xl">
+                <div class="flex justify-between text-sm text-slate-600">
+                    <span>Subtotal (Neto)</span>
+                    <span id="lblSubtotalPos" class="font-medium">S/ 0.00</span>
+                </div>
+                <div class="flex justify-between text-sm text-slate-600">
+                    <span>IGV (@((tasaIgv * 100).ToString("0"))%)</span>
+                    <span id="lblIgvPos" class="font-medium">S/ 0.00</span>
+                </div>
+                <div class="flex justify-between items-end pt-2 border-t border-slate-200">
+                    <span class="font-semibold text-slate-900">Total a pagar</span>
+                    <span id="lblTotalPos" class="text-3xl font-bold text-brand-700">S/ 0.00</span>
+                </div>
+
+                <button type="button"
+                        id="btnAbrirCobro"
+                        onclick="abrirModalCobro()"
+                        disabled
+                        class="btn-brand-primary w-full justify-center py-3.5 text-base mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i data-lucide="banknote" class="w-5 h-5"></i>
+                    <span>Cobrar</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botón flotante de acceso rápido al carrito en pantallas pequeñas (<1024px) -->
+    <button type="button"
+            onclick="document.getElementById('panelCarritoPos')?.scrollIntoView({ behavior: 'smooth' })"
+            class="lg:hidden fixed bottom-6 right-6 z-30 btn-brand-primary rounded-full px-5 py-3 shadow-xl flex items-center gap-2 cursor-pointer"
+            style="margin-top:0 !important;">
+        <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+        <span id="lblBotonFlotanteCarrito" class="text-sm font-semibold">Ver carrito</span>
+    </button>
+</div>
+
+<!-- Modal Procesar Pago (Patrón Strategy + Selección/Creación Rápida de Cliente) -->
+<div id="modalCobroPos" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4" style="margin-top:0 !important;">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div>
+                <h3 class="text-lg font-bold text-slate-900">Procesar pago</h3>
+                <p class="text-xs text-slate-400">Patrón Strategy · Validación automática de medio de pago</p>
+            </div>
+            <button type="button" onclick="cerrarModalCobro()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form id="formRegistrarVenta" asp-controller="Pos" asp-action="Registrar" method="post" onsubmit="return prepararEnvioVenta()">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="inputMetodoPago" name="MetodoPago" value="Efectivo" />
+            <div id="contenedorInputsLineas"></div>
+
+            <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <!-- Banner Total -->
+                <div class="text-center py-4 bg-brand-50 rounded-2xl border border-brand-100">
+                    <div class="text-xs text-brand-700 font-semibold uppercase tracking-wider">Total a pagar</div>
+                    <div id="lblModalTotalPagar" class="text-4xl font-bold text-brand-700 mt-1">S/ 0.00</div>
+                </div>
+
+                <!-- Selección de Cliente + Botón "+ Nuevo" en vivo -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label for="selectClientePos" class="text-xs font-semibold text-slate-700">Cliente del comprobante</label>
+                        <button type="button" onclick="toggleNuevoClienteRapido()" class="text-xs font-semibold text-brand-700 hover:text-brand-800 cursor-pointer">
+                            + Nuevo cliente rápido
+                        </button>
+                    </div>
+
+                    <select id="selectClientePos" name="ClienteId" class="input-chininin">
+                        @foreach (var c in Model.Clientes)
+                        {
+                            <option value="@c.Id" selected="@(c.EsPublicoGeneral)">
+                                @c.NombreCompleto (@c.TipoDoc: @c.Documento)
+                            </option>
+                        }
+                    </select>
+
+                    <!-- Mini-formulario para registrar cliente sin salir del POS -->
+                    <div id="boxNuevoClienteRapido" class="hidden bg-slate-50 rounded-xl p-3.5 space-y-2.5 border border-slate-200">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-700">Registrar cliente (Patrón Adapter)</span>
+                            <button type="button" onclick="toggleNuevoClienteRapido()" class="text-xs text-slate-400 hover:text-slate-600">Cerrar</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <select id="rapidoTipoDoc" class="input-chininin text-xs" onchange="document.getElementById('rapidoDoc').maxLength = this.value === 'DNI' ? 8 : 11">
+                                <option value="DNI">DNI (8)</option>
+                                <option value="RUC">RUC (11)</option>
+                            </select>
+                            <input id="rapidoDoc" type="text" maxlength="8" oninput="this.value=this.value.replace(/\D/g,'')" placeholder="N° Documento" class="col-span-2 input-chininin text-xs font-mono" />
+                        </div>
+                        <input id="rapidoNombre" type="text" maxlength="150" placeholder="Nombre completo o Razón Social" class="input-chininin text-xs" />
+                        <p id="errClienteRapido" class="hidden text-xs text-red-600"></p>
+                        <button type="button" id="btnGuardarClienteRapido" onclick="guardarClienteRapidoPos()" class="btn-brand-primary w-full justify-center py-2 text-xs">
+                            Guardar y seleccionar cliente
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selector de Método de Pago (Patrón Strategy) -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-2">Método de pago (Strategy)</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button type="button" onclick="seleccionarMetodoPago('Efectivo')" id="btnMetodo_Efectivo"
+                                class="btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-brand-600 bg-brand-50 text-brand-700 cursor-pointer">
+                            <i data-lucide="banknote" class="w-5 h-5"></i>
+                            <span>Efectivo</span>
+                        </button>
+                        <button type="button" onclick="seleccionarMetodoPago('Yape')" id="btnMetodo_Yape"
+                                class="btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+                            <i data-lucide="smartphone" class="w-5 h-5"></i>
+                            <span>Yape</span>
+                        </button>
+                        <button type="button" onclick="seleccionarMetodoPago('Plin')" id="btnMetodo_Plin"
+                                class="btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+                            <i data-lucide="smartphone" class="w-5 h-5"></i>
+                            <span>Plin</span>
+                        </button>
+                        <button type="button" onclick="seleccionarMetodoPago('Tarjeta')" id="btnMetodo_Tarjeta"
+                                class="btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+                            <i data-lucide="credit-card" class="w-5 h-5"></i>
+                            <span>Tarjeta</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel Estrategia 1: Efectivo -->
+                <div id="panelPagoEfectivo" class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label for="inputMontoRecibido" class="text-xs font-semibold text-slate-700">Efectivo recibido (S/)</label>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="fijarEfectivoExacto()" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700">Exacto</button>
+                            <button type="button" onclick="fijarBillete(10)" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700">S/ 10</button>
+                            <button type="button" onclick="fijarBillete(20)" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700">S/ 20</button>
+                            <button type="button" onclick="fijarBillete(50)" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700">S/ 50</button>
+                            <button type="button" onclick="fijarBillete(100)" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-slate-100 hover:bg-slate-200 text-slate-700">S/ 100</button>
+                        </div>
+                    </div>
+                    <input id="inputMontoRecibido" name="MontoRecibido" type="number" step="0.01" min="0"
+                           oninput="calcularVueltoEnVivo()"
+                           placeholder="0.00" class="input-chininin font-mono text-base font-semibold" />
+                    <div class="flex justify-between items-center pt-1 text-sm">
+                        <span class="text-slate-500">Vuelto / Cambio a entregar</span>
+                        <span id="lblVueltoPos" class="font-bold text-lg text-slate-900">S/ 0.00</span>
+                    </div>
+                    <p id="errEfectivoInsuficiente" class="hidden text-xs text-red-600 font-medium">
+                        El monto recibido debe ser mayor o igual al total de la venta.
+                    </p>
+                </div>
+
+                <!-- Panel Estrategia 2 y 3: Yape / Plin / Tarjeta -->
+                <div id="panelPagoDigital" class="hidden space-y-2">
+                    <label for="inputReferenciaPago" class="text-xs font-semibold text-slate-700">
+                        N° de Operación / Referencia POS (opcional)
+                    </label>
+                    <input id="inputReferenciaPago" name="CodigoReferenciaPago" type="text" maxlength="40"
+                           placeholder="Autogenerado si se deja en blanco"
+                           class="input-chininin font-mono text-sm" />
+                </div>
+            </div>
+
+            <div class="flex gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+                <button type="button" onclick="cerrarModalCobro()" class="btn-brand-secondary flex-1 justify-center">Cancelar</button>
+                <button type="submit" id="btnConfirmarCobro" class="btn-brand-primary flex-1 justify-center">
+                    <i data-lucide="printer" class="w-4 h-4"></i>
+                    <span>Confirmar venta</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Historial de Boletas Recientes -->
+<div id="modalHistorialReciente" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4" style="margin-top:0 !important;">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div>
+                <h3 class="text-lg font-bold text-slate-900">Últimas boletas emitidas</h3>
+                <p class="text-xs text-slate-400">Haz clic en cualquier comprobante para visualizarlo o imprimirlo</p>
+            </div>
+            <button type="button" onclick="cerrarModalHistorialReciente()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div class="max-h-[65vh] overflow-y-auto">
+            <table class="table-chininin">
+                <thead>
+                    <tr>
+                        <th>Comprobante</th>
+                        <th>Fecha y Hora</th>
+                        <th>Cliente</th>
+                        <th>Pago</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Ticket</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in Model.VentasRecientes)
+                    {
+                        <tr>
+                            <td class="font-mono font-bold text-brand-700">@v.NumeroBoleta</td>
+                            <td class="text-xs text-slate-600">@v.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="text-sm font-medium text-slate-800">@v.ClienteNombre</td>
+                            <td>
+                                <span class="badge-chininin bg-slate-100 text-slate-700 text-[11px]">@v.MetodoPago</span>
+                            </td>
+                            <td class="text-right font-bold text-slate-900">S/ @v.Total.ToString("0.00")</td>
+                            <td class="text-right">
+                                <a asp-controller="Pos" asp-action="Comprobante" asp-route-id="@v.Id" class="btn-brand-ghost p-1.5 inline-flex items-center gap-1 text-xs text-brand-700">
+                                    <i data-lucide="printer" class="w-3.5 h-3.5"></i> Ver
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.VentasRecientes.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-slate-400 text-sm">Aún no se han emitido boletas en este turno.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Automático de Ticket Imprimible (cuando se acaba de emitir una venta) -->
+@if (Model.UltimaVentaEmitida != null)
+{
+    var b = Model.UltimaVentaEmitida;
+    <div id="modalTicketEmitido" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" style="margin-top:0 !important;">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <h3 class="font-bold text-slate-900 text-sm">Comprobante Emitido</h3>
+                </div>
+                <button type="button" onclick="document.getElementById('modalTicketEmitido')?.remove()" class="btn-brand-ghost p-1">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div id="areaTicketImprimible" class="border border-dashed border-slate-300 rounded-xl p-4 text-center font-mono text-xs text-slate-900 bg-slate-50/40">
+                <div class="font-bold text-sm">@Model.Configuracion.NombreComercio.ToUpperInvariant()</div>
+                <div>RUC: @Model.Configuracion.Ruc</div>
+                <div class="text-[11px] text-slate-600">@Model.Configuracion.Direccion</div>
+                <div class="border-t border-dashed border-slate-300 my-2.5"></div>
+                <div class="font-bold">BOLETA DE VENTA INTERNA</div>
+                <div class="text-sm font-bold text-brand-700">@b.NumeroBoleta</div>
+                <div class="border-t border-dashed border-slate-300 my-2.5"></div>
+                <div class="text-left space-y-0.5 text-[11px]">
+                    <div><strong>Fecha:</strong> @b.Fecha.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                    <div><strong>Cliente:</strong> @b.ClienteNombre</div>
+                    <div><strong>@b.ClienteTipoDoc:</strong> @b.ClienteDocumento</div>
+                    <div><strong>Cajero:</strong> @b.CajeroNombre</div>
+                    <div><strong>Pago:</strong> @b.MetodoPago @(string.IsNullOrWhiteSpace(referenciaBoleta) ? "" : $"({referenciaBoleta})")</div>
+                </div>
+                <div class="border-t border-dashed border-slate-300 my-2.5"></div>
+                <div class="text-left space-y-1.5">
+                    @foreach (var d in b.Detalles)
+                    {
+                        <div>
+                            <div class="font-semibold">@d.NombreProducto</div>
+                            <div class="flex justify-between text-[11px] text-slate-600">
+                                <span>@d.Cantidad.ToString("0.###") x S/ @d.PrecioUnitario.ToString("0.00")</span>
+                                <span class="font-semibold text-slate-900">S/ @d.Subtotal.ToString("0.00")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="border-t border-dashed border-slate-300 my-2.5"></div>
+                <div class="text-left space-y-1">
+                    <div class="flex justify-between"><span>Subtotal:</span><span>S/ @b.Subtotal.ToString("0.00")</span></div>
+                    <div class="flex justify-between"><span>IGV (@((tasaIgv * 100).ToString("0"))%):</span><span>S/ @b.Igv.ToString("0.00")</span></div>
+                    <div class="flex justify-between font-bold text-sm pt-1 border-t border-dashed border-slate-300">
+                        <span>TOTAL:</span><span>S/ @b.Total.ToString("0.00")</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(montoRecibidoBoleta))
+                    {
+                        <div class="flex justify-between text-[11px] text-slate-600">
+                            <span>Recibido (@b.MetodoPago):</span><span>S/ @montoRecibidoBoleta</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(vueltoBoleta) && vueltoBoleta != "0.00")
+                    {
+                        <div class="flex justify-between text-[11px] font-bold">
+                            <span>Vuelto:</span><span>S/ @vueltoBoleta</span>
+                        </div>
+                    }
+                </div>
+                <div class="border-t border-dashed border-slate-300 my-2.5"></div>
+                <div class="text-[11px]">¡Gracias por su compra en Chininin!</div>
+            </div>
+
+            <div class="flex gap-2 mt-4">
+                <button type="button" onclick="document.getElementById('modalTicketEmitido')?.remove()" class="btn-brand-secondary flex-1 justify-center">
+                    Cerrar
+                </button>
+                <a asp-controller="Pos" asp-action="Comprobante" asp-route-id="@b.Id" class="btn-brand-primary flex-1 justify-center">
+                    <i data-lucide="printer" class="w-4 h-4"></i>
+                    <span>Vista Impresión</span>
+                </a>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    const CATALOGO_POS = @Html.Raw(JsonSerializer.Serialize(Model.Productos.Select(p => new {
+        id = p.Id,
+        nombre = p.Nombre,
+        codigo = p.CodigoBarras ?? "",
+        precio = p.PrecioVenta,
+        stock = p.Stock,
+        unidad = p.UnidadMedida,
+        bloqueado = p.Stock <= 0 || p.EstadoVencimiento == "Vencido" || p.EstadoVencimiento == "VENCIDO"
+    })));
+
+    const TASA_IGV = @tasaIgv.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    let categoriaActivaPos = 0;
+    let carrito = [];
+    let metodoSeleccionado = 'Efectivo';
+    let scanTimer = null;
+
+    function esUnidadPeso(unidad) {
+        return (unidad || '').toUpperCase() === 'KG';
+    }
+
+    function pasoUnidad(unidad) {
+        return esUnidadPeso(unidad) ? 0.5 : 1;
+    }
+
+    function minUnidad(unidad) {
+        return esUnidadPeso(unidad) ? 0.1 : 1;
+    }
+
+    function mostrarAlertaStock(mensaje) {
+        const box = document.getElementById('alertaStockPos');
+        document.getElementById('txtAlertaStockPos').textContent = mensaje;
+        box.classList.remove('hidden');
+        box.classList.add('flex');
+        setTimeout(() => {
+            box.classList.add('hidden');
+            box.classList.remove('flex');
+        }, 3200);
+    }
+
+    function filtrarCategoriaPos(catId) {
+        categoriaActivaPos = catId;
+        document.querySelectorAll('.pill-cat-pos').forEach(btn => {
+            btn.className = 'pill-cat-pos shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer';
+        });
+        const activo = document.getElementById('pillCat_' + catId);
+        if (activo) {
+            activo.className = 'pill-cat-pos shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition bg-brand-600 text-white cursor-pointer';
+        }
+        aplicarFiltroCatalogoPos();
+    }
+
+    function manejarBusquedaPos(valor) {
+        aplicarFiltroCatalogoPos();
+        if (scanTimer) clearTimeout(scanTimer);
+        const limpio = (valor || '').trim();
+        if (limpio.length >= 6) {
+            scanTimer = setTimeout(() => {
+                const exacto = CATALOGO_POS.find(p => p.codigo === limpio && !p.bloqueado);
+                if (exacto) {
+                    agregarAlCarrito(exacto.id);
+                    const input = document.getElementById('inputBuscarPos');
+                    input.value = '';
+                    aplicarFiltroCatalogoPos();
+                }
+            }, 180);
+        }
+    }
+
+    function intentarEscanearExacto() {
+        const input = document.getElementById('inputBuscarPos');
+        const limpio = (input.value || '').trim();
+        if (!limpio) return;
+        const exacto = CATALOGO_POS.find(p => p.codigo === limpio && !p.bloqueado);
+        if (exacto) {
+            agregarAlCarrito(exacto.id);
+            input.value = '';
+            aplicarFiltroCatalogoPos();
+        }
+    }
+
+    function aplicarFiltroCatalogoPos() {
+        const q = (document.getElementById('inputBuscarPos').value || '').toLowerCase().trim();
+        document.querySelectorAll('.tarjeta-producto-pos').forEach(card => {
+            const cat = Number(card.getAttribute('data-cat'));
+            const texto = card.getAttribute('data-busqueda') || '';
+            const coincideCat = categoriaActivaPos === 0 || cat === categoriaActivaPos;
+            const coincideTexto = !q || texto.includes(q);
+            card.classList.toggle('hidden', !(coincideCat && coincideTexto));
+        });
+    }
+
+    function agregarAlCarrito(productoId) {
+        const prod = CATALOGO_POS.find(p => p.id === productoId);
+        if (!prod || prod.bloqueado) return;
+
+        const existente = carrito.find(item => item.producto.id === productoId);
+        const incremento = existingIncrement(prod.unidad, !!existente);
+        const nuevaCant = existente ? Number((existente.cantidad + incremento).toFixed(3)) : 1;
+
+        if (nuevaCant > prod.stock) {
+            mostrarAlertaStock(`Stock insuficiente: solo quedan ${prod.stock} ${prod.unidad} de "${prod.nombre}".`);
+            return;
+        }
+
+        if (existente) {
+            existente.cantidad = nuevaCant;
+        } else {
+            carrito.push({ producto: prod, cantidad: prod.stock < 1 ? prod.stock : 1 });
+        }
+
+        renderizarCarrito();
+    }
+
+    function existingIncrement(unidad, yaExiste) {
+        if (!yaExiste) return 1;
+        return esUnidadPeso(unidad) ? 0.5 : 1;
+    }
+
+    function cambiarCantidadCarrito(productoId, nuevaCantidad) {
+        const item = carrito.find(x => x.producto.id === productoId);
+        if (!item) return;
+
+        const prod = item.producto;
+        const min = minUnidad(prod.unidad);
+        let cant = Number(nuevaCantidad);
+        if (isNaN(cant) || cant < min) cant = min;
+
+        if (!esUnidadPeso(prod.unidad)) {
+            cant = Math.round(cant);
+        } else {
+            cant = Number(cant.toFixed(3));
+        }
+
+        if (cant > prod.stock) {
+            mostrarAlertaStock(`Máximo disponible en almacén: ${prod.stock} ${prod.unidad}.`);
+            cant = prod.stock;
+        }
+
+        item.cantidad = cant;
+        renderizarCarrito();
+    }
+
+    function quitarDelCarrito(productoId) {
+        carrito = carrito.filter(x => x.producto.id !== productoId);
+        renderizarCarrito();
+    }
+
+    function vaciarCarrito() {
+        carrito = [];
+        renderizarCarrito();
+    }
+
+    function obtenerTotalCarrito() {
+        const total = carrito.reduce((acc, item) => {
+            const sub = Math.round((item.producto.precio * item.cantidad + Number.EPSILON) * 100) / 100;
+            return acc + sub;
+        }, 0);
+        return Math.round((total + Number.EPSILON) * 100) / 100;
+    }
+
+    function renderizarCarrito() {
+        const contenedor = document.getElementById('contenedorItemsCarrito');
+        const vacio = document.getElementById('estadoCarritoVacio');
+        const btnVaciar = document.getElementById('btnVaciarCarrito');
+        const btnCobrar = document.getElementById('btnAbrirCobro');
+
+        contenedor.querySelectorAll('.item-carrito-pos').forEach(el => el.remove());
+
+        if (carrito.length === 0) {
+            vacio.classList.remove('hidden');
+            btnVaciar.classList.add('hidden');
+            btnCobrar.disabled = true;
+        } else {
+            vacio.classList.add('hidden');
+            btnVaciar.classList.remove('hidden');
+            btnCobrar.disabled = false;
+
+            carrito.forEach(item => {
+                const p = item.producto;
+                const paso = pasoUnidad(p.unidad);
+                const min = minUnidad(p.unidad);
+                const importe = (Math.round((p.precio * item.cantidad + Number.EPSILON) * 100) / 100).toFixed(2);
+
+                const div = document.createElement('div');
+                div.className = 'item-carrito-pos p-3 rounded-xl border border-slate-200/80 bg-white hover:border-brand-300 transition';
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="font-semibold text-slate-900 text-sm leading-tight">${p.nombre}</div>
+                        <button type="button" onclick="quitarDelCarrito(${p.id})" class="text-slate-400 hover:text-red-600 p-0.5 cursor-pointer">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-0.5">S/ ${p.precio.toFixed(2)} por ${p.unidad === 'KG' ? 'kg' : 'unidad'}</div>
+                    <div class="flex items-center justify-between mt-2.5">
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="cambiarCantidadCarrito(${p.id}, ${(item.cantidad - paso).toFixed(3)})"
+                                    class="w-7 h-7 grid place-items-center rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold cursor-pointer">-</button>
+                            <input type="number" value="${item.cantidad}" min="${min}" max="${p.stock}" step="${esUnidadPeso(p.unidad) ? '0.05' : '1'}"
+                                   onchange="cambiarCantidadCarrito(${p.id}, this.value)"
+                                   class="w-16 text-center font-semibold text-slate-900 border border-slate-200 rounded-lg py-1 text-xs focus:outline-none focus:border-brand-500" />
+                            <button type="button" onclick="cambiarCantidadCarrito(${p.id}, ${(item.cantidad + paso).toFixed(3)})"
+                                    class="w-7 h-7 grid place-items-center rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold cursor-pointer">+</button>
+                        </div>
+                        <div class="font-bold text-slate-900 text-sm">S/ ${importe}</div>
+                    </div>
+                `;
+                contenedor.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        const total = obtenerTotalCarrito();
+        const subtotal = Math.round((total / (1 + TASA_IGV) + Number.EPSILON) * 100) / 100;
+        const igv = Math.round((total - subtotal + Number.EPSILON) * 100) / 100;
+
+        document.getElementById('lblSubtotalPos').textContent = 'S/ ' + subtotal.toFixed(2);
+        document.getElementById('lblIgvPos').textContent = 'S/ ' + igv.toFixed(2);
+        document.getElementById('lblTotalPos').textContent = 'S/ ' + total.toFixed(2);
+
+        const lblFlotante = document.getElementById('lblBotonFlotanteCarrito');
+        if (lblFlotante) {
+            lblFlotante.textContent = carrito.length > 0
+                ? `${carrito.length} ítem${carrito.length !== 1 ? 's' : ''} · S/ ${total.toFixed(2)}`
+                : 'Ver carrito';
+        }
+    }
+
+    function abrirModalCobro() {
+        if (carrito.length === 0) return;
+        const total = obtenerTotalCarrito();
+        document.getElementById('lblModalTotalPagar').textContent = 'S/ ' + total.toFixed(2);
+        document.getElementById('inputMontoRecibido').value = total.toFixed(2);
+        seleccionarMetodoPago('Efectivo');
+
+        const modal = document.getElementById('modalCobroPos');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function cerrarModalCobro() {
+        const modal = document.getElementById('modalCobroPos');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function seleccionarMetodoPago(metodo) {
+        metodoSeleccionado = metodo;
+        document.getElementById('inputMetodoPago').value = metodo;
+
+        ['Efectivo', 'Yape', 'Plin', 'Tarjeta'].forEach(m => {
+            const btn = document.getElementById('btnMetodo_' + m);
+            if (m === metodo) {
+                btn.className = 'btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-brand-600 bg-brand-50 text-brand-700 cursor-pointer';
+            } else {
+                btn.className = 'btn-metodo-pos flex flex-col items-center gap-1 p-3 rounded-xl border text-xs font-semibold transition border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer';
+            }
+        });
+
+        const esEfectivo = metodo === 'Efectivo';
+        document.getElementById('panelPagoEfectivo').classList.toggle('hidden', !esEfectivo);
+        document.getElementById('panelPagoDigital').classList.toggle('hidden', esEfectivo);
+        calcularVueltoEnVivo();
+    }
+
+    function fijarEfectivoExacto() {
+        document.getElementById('inputMontoRecibido').value = obtenerTotalCarrito().toFixed(2);
+        calcularVueltoEnVivo();
+    }
+
+    function fijarBillete(monto) {
+        document.getElementById('inputMontoRecibido').value = monto.toFixed(2);
+        calcularVueltoEnVivo();
+    }
+
+    function calcularVueltoEnVivo() {
+        const total = obtenerTotalCarrito();
+        const recibido = parseFloat(document.getElementById('inputMontoRecibido').value) || 0;
+        const err = document.getElementById('errEfectivoInsuficiente');
+        const btn = document.getElementById('btnConfirmarCobro');
+
+        if (metodoSeleccionado === 'Efectivo') {
+            if (recibido < total) {
+                document.getElementById('lblVueltoPos').textContent = 'S/ 0.00';
+                err.classList.remove('hidden');
+                btn.disabled = true;
+                return false;
+            } else {
+                const vuelto = Math.max(0, recibido - total);
+                document.getElementById('lblVueltoPos').textContent = 'S/ ' + vuelto.toFixed(2);
+                err.classList.add('hidden');
+                btn.disabled = false;
+                return true;
+            }
+        } else {
+            err.classList.add('hidden');
+            btn.disabled = false;
+            return true;
+        }
+    }
+
+    function prepararEnvioVenta() {
+        if (carrito.length === 0) return false;
+        if (!calcularVueltoEnVivo()) return false;
+
+        const cont = document.getElementById('contenedorInputsLineas');
+        cont.innerHTML = '';
+
+        carrito.forEach((item, idx) => {
+            const inProd = document.createElement('input');
+            inProd.type = 'hidden';
+            inProd.name = `Lineas[${idx}].ProductoId`;
+            inProd.value = item.producto.id;
+            cont.appendChild(inProd);
+
+            const inCant = document.createElement('input');
+            inCant.type = 'hidden';
+            inCant.name = `Lineas[${idx}].Cantidad`;
+            inCant.value = item.cantidad;
+            cont.appendChild(inCant);
+        });
+
+        setTimeout(() => {
+            const btn = document.getElementById('btnConfirmarCobro');
+            if (btn) btn.disabled = true;
+        }, 10);
+        return true;
+    }
+
+    function toggleNuevoClienteRapido() {
+        const box = document.getElementById('boxNuevoClienteRapido');
+        box.classList.toggle('hidden');
+        document.getElementById('errClienteRapido').classList.add('hidden');
+    }
+
+    async function guardarClienteRapidoPos() {
+        const tipoDoc = document.getElementById('rapidoTipoDoc').value;
+        const documento = document.getElementById('rapidoDoc').value.trim();
+        const nombreCompleto = document.getElementById('rapidoNombre').value.trim();
+        const err = document.getElementById('errClienteRapido');
+        const token = document.querySelector('#formRegistrarVenta input[name="__RequestVerificationToken"]').value;
+
+        err.classList.add('hidden');
+
+        try {
+            const resp = await fetch('@Url.Action("CrearRapidoJson", "Clientes")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({ tipoDoc, documento, nombreCompleto })
+            });
+
+            const data = await resp.json();
+            if (!resp.ok || !data.exito) {
+                err.textContent = data.mensaje || 'No se pudo registrar el cliente.';
+                err.classList.remove('hidden');
+                return;
+            }
+
+            const select = document.getElementById('selectClientePos');
+            const opt = document.createElement('option');
+            opt.value = data.cliente.id;
+            opt.textContent = `${data.cliente.nombreCompleto} (${data.cliente.tipoDoc}: ${data.cliente.documento})`;
+            opt.selected = true;
+            select.appendChild(opt);
+
+            document.getElementById('rapidoDoc').value = '';
+            document.getElementById('rapidoNombre').value = '';
+            document.getElementById('boxNuevoClienteRapido').classList.add('hidden');
+        } catch (e) {
+            err.textContent = 'Error de red al registrar cliente.';
+            err.classList.remove('hidden');
+        }
+    }
+
+    function abrirModalHistorialReciente() {
+        const modal = document.getElementById('modalHistorialReciente');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function cerrarModalHistorialReciente() {
+        const modal = document.getElementById('modalHistorialReciente');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+</script>
+}
