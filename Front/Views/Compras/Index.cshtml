@@ -1,0 +1,565 @@
+@model Minimarket.Front.Models.ComprasViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Órdenes de Compra";
+    var toastExito = TempData["ToastExito"] as string;
+    var toastError = TempData["ToastError"] as string;
+}
+
+<div class="space-y-6">
+    @if (!string.IsNullOrWhiteSpace(toastExito))
+    {
+        <div id="toastComprasOk" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0"></i>
+                <span class="font-medium">@toastExito</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastComprasOk')?.remove()" class="text-emerald-600 hover:text-emerald-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(toastError))
+    {
+        <div id="toastComprasErr" class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 shrink-0"></i>
+                <span class="font-medium">@toastError</span>
+            </div>
+            <button type="button" onclick="document.getElementById('toastComprasErr')?.remove()" class="text-red-600 hover:text-red-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Encabezado Principal -->
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <div class="flex items-center gap-2">
+                <h1 class="text-2xl font-bold text-slate-900">Órdenes de compra</h1>
+                <span class="badge-chininin bg-brand-50 text-brand-700 border border-brand-200 text-[11px]">
+                    <i data-lucide="clipboard-check" class="w-3 h-3"></i> CU-06 · RF-04 Abastecimiento
+                </span>
+            </div>
+            <p class="text-slate-500 text-sm mt-1">
+                Gestiona las órdenes de abastecimiento a proveedores y la recepción transaccional de mercadería en almacén
+            </p>
+        </div>
+
+        <button type="button" onclick="abrirModalNuevaOrden()" class="btn-brand-primary">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Nueva orden</span>
+        </button>
+    </div>
+
+    <!-- KPIs de Abastecimiento (Idéntico a Compras.tsx) -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="card-chininin p-5 border-l-4 border-l-amber-400">
+            <div class="text-sm text-slate-500 font-medium">Pendientes de recepción</div>
+            <div class="text-3xl font-bold text-amber-600 mt-1">@Model.TotalPendientes</div>
+            <div class="text-xs text-slate-400 mt-1">Órdenes emitidas en espera de ingreso a almacén</div>
+        </div>
+
+        <div class="card-chininin p-5 border-l-4 border-l-brand-600">
+            <div class="text-sm text-slate-500 font-medium">Recibidas en almacén</div>
+            <div class="text-3xl font-bold text-brand-700 mt-1">@Model.TotalRecibidas</div>
+            <div class="text-xs text-slate-400 mt-1">Stock incrementado y registrado en Kardex</div>
+        </div>
+
+        <div class="card-chininin p-5 border-l-4 border-l-slate-400">
+            <div class="text-sm text-slate-500 font-medium">Total comprado (mes actual)</div>
+            <div class="text-3xl font-bold text-slate-900 mt-1">S/ @Model.TotalCompradoMesActual.ToString("N2")</div>
+            <div class="text-xs text-slate-400 mt-1">Inversión acumulada en órdenes recibidas</div>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros -->
+    <div class="card-chininin p-4 flex flex-wrap gap-3 items-center">
+        <div class="relative flex-1 min-w-[220px]">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+            <input id="inputBuscarOrden" type="text" oninput="filtrarOrdenes()"
+                   placeholder="Buscar por N° orden (ej: OC-00001) o proveedor..."
+                   class="input-chininin pl-10" />
+        </div>
+
+        <select id="selectEstadoOrden" onchange="filtrarOrdenes()" class="input-chininin !w-auto min-w-[190px]">
+            <option value="todos">Todos los estados</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Recibida">Recibida</option>
+            <option value="Anulada">Anulada</option>
+        </select>
+    </div>
+
+    <!-- Tabla de Órdenes de Compra -->
+    <div class="card-chininin overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="table-chininin" id="tablaOrdenesCompra">
+                <thead>
+                    <tr>
+                        <th>N° Orden</th>
+                        <th>Fecha emisión</th>
+                        <th>Proveedor</th>
+                        <th class="text-center">Ítems</th>
+                        <th class="text-right">Total</th>
+                        <th>Estado</th>
+                        <th class="text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in Model.Ordenes)
+                    {
+                        var esPendiente = o.Estado.Equals("Pendiente", StringComparison.OrdinalIgnoreCase);
+                        var esRecibida = o.Estado.Equals("Recibida", StringComparison.OrdinalIgnoreCase);
+                        var badgeCls = esRecibida
+                            ? "bg-brand-50 text-brand-700 border border-brand-200"
+                            : esPendiente
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-red-50 text-red-700 border border-red-200";
+                        var iconName = esRecibida ? "check-circle-2" : esPendiente ? "clock" : "x-circle";
+                        var busqueda = $"{o.NumeroOrden} {o.ProveedorNombre} {o.ProveedorRuc}".ToLower();
+
+                        <tr class="fila-orden-compra" data-estado="@o.Estado" data-busqueda="@busqueda">
+                            <td class="font-mono font-bold text-slate-900">@o.NumeroOrden</td>
+                            <td class="text-xs font-mono text-slate-500">@o.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <div class="font-semibold text-slate-900">@o.ProveedorNombre</div>
+                                @if (!string.IsNullOrWhiteSpace(o.ProveedorRuc))
+                                {
+                                    <div class="text-[11px] font-mono text-slate-400">RUC: @o.ProveedorRuc</div>
+                                }
+                            </td>
+                            <td class="text-center font-semibold text-slate-700">@o.TotalItems</td>
+                            <td class="text-right font-bold text-slate-900">S/ @o.Total.ToString("0.00")</td>
+                            <td>
+                                <span class="badge-chininin @badgeCls">
+                                    <i data-lucide="@iconName" class="w-3.5 h-3.5"></i>
+                                    <span>@o.Estado</span>
+                                </span>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <button type="button"
+                                            onclick="abrirModalDetalleOrden(@o.Id)"
+                                            class="btn-brand-ghost p-1.5 text-slate-600 hover:text-slate-900"
+                                            title="Ver detalle de la orden">
+                                        <i data-lucide="file-text" class="w-4 h-4"></i>
+                                    </button>
+                                    @if (esPendiente)
+                                    {
+                                        <button type="button"
+                                                onclick="abrirModalConfirmarRecepcion(@o.Id)"
+                                                class="btn-brand-ghost p-1.5 text-brand-600 hover:bg-brand-50"
+                                                title="Confirmar recepción en almacén">
+                                            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    <tr id="filaSinOrdenes" class="@(Model.Ordenes.Count == 0 ? "" : "hidden")">
+                        <td colspan="7" class="text-center py-10 text-slate-400">
+                            No se encontraron órdenes de compra para los filtros seleccionados
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 1: Nueva Orden de Compra -->
+<div id="modalNuevaOrden" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4" style="margin-top:0 !important;">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <div>
+                <h2 class="font-bold text-slate-900 text-lg">Nueva orden de compra</h2>
+                <p class="text-xs text-slate-400 mt-0.5">Selecciona el proveedor y los productos a solicitar</p>
+            </div>
+            <button type="button" onclick="cerrarModalNuevaOrden()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <form id="formNuevaOrden" asp-controller="Compras" asp-action="Crear" method="post" onsubmit="return prepararEnvioNuevaOrden()" class="flex-1 flex flex-col overflow-hidden">
+            @Html.AntiForgeryToken()
+            <div id="contenedorInputsItemsOrden"></div>
+
+            <div class="p-5 overflow-y-auto flex-1 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="selectProveedorOrden" class="block text-xs font-semibold text-slate-700 mb-1">
+                            Proveedor <span class="text-red-500">*</span>
+                        </label>
+                        <select id="selectProveedorOrden" name="ProveedorId" class="input-chininin" required>
+                            <option value="">Seleccionar proveedor...</option>
+                            @foreach (var p in Model.Proveedores)
+                            {
+                                <option value="@p.Id">@p.RazonSocial (RUC: @p.Ruc)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="inputObsOrden" class="block text-xs font-semibold text-slate-700 mb-1">
+                            Observaciones (opcional)
+                        </label>
+                        <input id="inputObsOrden" name="Observaciones" type="text" maxlength="200"
+                               placeholder="Ej: Reposición semanal de almacén"
+                               class="input-chininin" />
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-semibold text-slate-700">Productos solicitados</label>
+                        <button type="button" onclick="agregarFilaItemOrden()" class="text-xs font-semibold text-brand-700 hover:text-brand-800 flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Agregar ítem
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-12 gap-2 mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        <div class="col-span-6">Producto</div>
+                        <div class="col-span-2 text-center">Cantidad</div>
+                        <div class="col-span-3 text-right">Costo Unit. (S/)</div>
+                        <div class="col-span-1"></div>
+                    </div>
+
+                    <div id="listaFilasItemsOrden" class="space-y-2"></div>
+                    <p id="errItemsOrden" class="hidden text-xs text-red-600 mt-2"></p>
+                </div>
+
+                <div class="flex justify-end pt-3 border-t border-slate-100">
+                    <div class="text-right">
+                        <div class="text-xs text-slate-500">Total estimado de la orden</div>
+                        <div id="lblTotalEstimadoOrden" class="text-2xl font-bold text-slate-900">S/ 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button type="button" onclick="cerrarModalNuevaOrden()" class="btn-brand-secondary flex-1 justify-center">Cancelar</button>
+                <button type="submit" class="btn-brand-primary flex-1 justify-center">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    <span>Generar orden</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 2: Detalle de Orden de Compra -->
+<div id="modalDetalleOrden" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4" style="margin-top:0 !important;">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <h2 id="tituloDetalleOrden" class="font-bold text-slate-900 text-lg">Detalle OC</h2>
+            <button type="button" onclick="cerrarModalDetalleOrden()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="p-5 space-y-3">
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-500">Proveedor</span>
+                <span id="detProveedorOrden" class="font-semibold text-slate-900 text-right"></span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-500">Fecha emisión</span>
+                <span id="detFechaOrden" class="font-mono text-xs text-slate-700"></span>
+            </div>
+            <div class="flex justify-between text-sm items-center">
+                <span class="text-slate-500">Estado</span>
+                <span id="detEstadoOrden" class="badge-chininin"></span>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+                <div class="text-xs text-slate-500 font-semibold mb-2 uppercase tracking-wide">Productos de la orden</div>
+                <div id="detListaProductosOrden" class="space-y-1.5 max-h-52 overflow-y-auto"></div>
+            </div>
+
+            <div class="flex justify-between font-bold text-lg border-t border-slate-100 pt-3 text-slate-900">
+                <span>Total</span>
+                <span id="detTotalOrden">S/ 0.00</span>
+            </div>
+        </div>
+
+        <div id="pieAccionesDetalleOrden" class="hidden gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+            <form asp-controller="Compras" asp-action="Anular" method="post" class="flex-1">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="inputAnularOrdenId" name="ordenId" value="" />
+                <button type="submit" class="btn-brand-secondary !border-red-200 !bg-red-50 !text-red-600 hover:!bg-red-100 w-full justify-center">
+                    Anular orden
+                </button>
+            </form>
+            <button type="button" id="btnIrARecepcionDesdeDetalle" class="btn-brand-primary flex-1 justify-center">
+                Marcar recibida
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 3: Confirmar Recepción en Almacén (RF-04 + Entrada Automática en Kardex) -->
+<div id="modalConfirmarRecepcion" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4" style="margin-top:0 !important;">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <div>
+                <h2 id="tituloConfirmarRecepcion" class="font-bold text-slate-900 text-lg">Confirmar recepción</h2>
+                <p class="text-xs text-slate-400">Actualiza el stock e inserta el movimiento de ENTRADA en el Kardex</p>
+            </div>
+            <button type="button" onclick="cerrarModalConfirmarRecepcion()" class="btn-brand-ghost p-1.5">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <form asp-controller="Compras" asp-action="ConfirmarRecepcion" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="inputRecepcionOrdenId" name="OrdenId" value="" />
+
+            <div class="p-5 space-y-4">
+                <p class="text-xs text-slate-500">
+                    Verifica o ajusta las cantidades realmente recibidas en almacén antes de confirmar el ingreso:
+                </p>
+                <div id="contenedorItemsRecepcion" class="space-y-2.5 max-h-64 overflow-y-auto"></div>
+            </div>
+
+            <div class="flex gap-3 p-5 border-t border-slate-100 bg-slate-50/50">
+                <button type="button" onclick="cerrarModalConfirmarRecepcion()" class="btn-brand-secondary flex-1 justify-center">Cancelar</button>
+                <button type="submit" class="btn-brand-primary flex-1 justify-center">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    <span>Confirmar recepción</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const CATALOGO_COMPRAS = @Html.Raw(JsonSerializer.Serialize(Model.Productos.Select(p => new {
+        id = p.Id,
+        nombre = p.Nombre,
+        costo = p.CostoUnitario,
+        unidad = p.UnidadMedida
+    })));
+
+    const ORDENES_DATA = @Html.Raw(JsonSerializer.Serialize(Model.Ordenes.Select(o => new {
+        id = o.Id,
+        numero = o.NumeroOrden,
+        proveedor = o.ProveedorNombre,
+        fecha = o.FechaEmision.ToString("dd/MM/yyyy HH:mm"),
+        estado = o.Estado,
+        total = o.Total,
+        detalles = o.Detalles.Select(d => new {
+            id = d.Id,
+            productoId = d.ProductoId,
+            nombre = d.NombreProducto,
+            cantidad = d.Cantidad,
+            costo = d.CostoUnitario
+        })
+    })));
+
+    let itemsNuevaOrden = [];
+
+    function filtrarOrdenes() {
+        const q = (document.getElementById('inputBuscarOrden').value || '').toLowerCase().trim();
+        const estado = document.getElementById('selectEstadoOrden').value;
+        let visibles = 0;
+
+        document.querySelectorAll('.fila-orden-compra').forEach(tr => {
+            const estFila = tr.getAttribute('data-estado') || '';
+            const texto = tr.getAttribute('data-busqueda') || '';
+            const okEstado = estado === 'todos' || estFila.toLowerCase() === estado.toLowerCase();
+            const okTexto = !q || texto.includes(q);
+            const mostrar = okEstado && okTexto;
+            tr.classList.toggle('hidden', !mostrar);
+            if (mostrar) visibles++;
+        });
+
+        document.getElementById('filaSinOrdenes').classList.toggle('hidden', visibles > 0);
+    }
+
+    function abrirModalNuevaOrden() {
+        document.getElementById('selectProveedorOrden').value = '';
+        document.getElementById('inputObsOrden').value = '';
+        document.getElementById('errItemsOrden').classList.add('hidden');
+        itemsNuevaOrden = [{ productoId: 0, cantidad: 1, costo: 0 }];
+        renderizarFilasNuevaOrden();
+
+        const modal = document.getElementById('modalNuevaOrden');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function cerrarModalNuevaOrden() {
+        const modal = document.getElementById('modalNuevaOrden');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function agregarFilaItemOrden() {
+        itemsNuevaOrden.push({ productoId: 0, cantidad: 1, costo: 0 });
+        renderizarFilasNuevaOrden();
+    }
+
+    function quitarFilaItemOrden(idx) {
+        if (itemsNuevaOrden.length <= 1) return;
+        itemsNuevaOrden.splice(idx, 1);
+        renderizarFilasNuevaOrden();
+    }
+
+    function cambiarProductoItemOrden(idx, prodId) {
+        const idNum = Number(prodId) || 0;
+        const prod = CATALOGO_COMPRAS.find(p => p.id === idNum);
+        itemsNuevaOrden[idx].productoId = idNum;
+        itemsNuevaOrden[idx].costo = prod ? prod.costo : 0;
+        renderizarFilasNuevaOrden();
+    }
+
+    function cambiarValorItemOrden(idx, campo, valor) {
+        itemsNuevaOrden[idx][campo] = Number(valor) || 0;
+        actualizarTotalEstimadoOrden();
+    }
+
+    function renderizarFilasNuevaOrden() {
+        const cont = document.getElementById('listaFilasItemsOrden');
+        cont.innerHTML = '';
+
+        itemsNuevaOrden.forEach((item, idx) => {
+            const opciones = CATALOGO_COMPRAS.map(p =>
+                `<option value="${p.id}" ${p.id === item.productoId ? 'selected' : ''}>${p.nombre}</option>`
+            ).join('');
+
+            const div = document.createElement('div');
+            div.className = 'grid grid-cols-12 gap-2 items-center';
+            div.innerHTML = `
+                <select onchange="cambiarProductoItemOrden(${idx}, this.value)" class="input-chininin col-span-6 text-xs">
+                    <option value="0">Seleccionar producto...</option>
+                    ${opciones}
+                </select>
+                <input type="number" min="0.1" step="any" value="${item.cantidad}"
+                       oninput="cambiarValorItemOrden(${idx}, 'cantidad', this.value)"
+                       class="input-chininin col-span-2 text-center text-xs font-semibold" />
+                <input type="number" min="0.01" step="0.01" value="${item.costo.toFixed(2)}"
+                       oninput="cambiarValorItemOrden(${idx}, 'costo', this.value)"
+                       class="input-chininin col-span-3 text-right text-xs font-mono" />
+                <button type="button" onclick="quitarFilaItemOrden(${idx})"
+                        class="col-span-1 btn-brand-ghost p-1.5 text-red-500 hover:bg-red-50 justify-center">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            `;
+            cont.appendChild(div);
+        });
+
+        lucide.createIcons();
+        actualizarTotalEstimadoOrden();
+    }
+
+    function actualizarTotalEstimadoOrden() {
+        const total = itemsNuevaOrden.reduce((acc, it) => acc + (it.productoId > 0 ? it.cantidad * it.costo : 0), 0);
+        document.getElementById('lblTotalEstimadoOrden').textContent = 'S/ ' + total.toFixed(2);
+    }
+
+    function prepararEnvioNuevaOrden() {
+        const validos = itemsNuevaOrden.filter(i => i.productoId > 0 && i.cantidad > 0);
+        const err = document.getElementById('errItemsOrden');
+        if (validos.length === 0) {
+            err.textContent = 'Debes seleccionar al menos un producto con cantidad mayor a cero.';
+            err.classList.remove('hidden');
+            return false;
+        }
+        err.classList.add('hidden');
+
+        const cont = document.getElementById('contenedorInputsItemsOrden');
+        cont.innerHTML = '';
+        validos.forEach((it, idx) => {
+            cont.insertAdjacentHTML('beforeend', `
+                <input type="hidden" name="Items[${idx}].ProductoId" value="${it.productoId}" />
+                <input type="hidden" name="Items[${idx}].Cantidad" value="${it.cantidad}" />
+                <input type="hidden" name="Items[${idx}].CostoUnitario" value="${it.costo.toFixed(2)}" />
+            `);
+        });
+        return true;
+    }
+
+    function abrirModalDetalleOrden(ordenId) {
+        const o = ORDENES_DATA.find(x => x.id === ordenId);
+        if (!o) return;
+
+        document.getElementById('tituloDetalleOrden').textContent = `Detalle ${o.numero}`;
+        document.getElementById('detProveedorOrden').textContent = o.proveedor;
+        document.getElementById('detFechaOrden').textContent = o.fecha;
+        document.getElementById('detTotalOrden').textContent = 'S/ ' + o.total.toFixed(2);
+
+        const badge = document.getElementById('detEstadoOrden');
+        badge.textContent = o.estado;
+        badge.className = 'badge-chininin ' + (o.estado === 'Recibida'
+            ? 'bg-brand-50 text-brand-700'
+            : o.estado === 'Pendiente'
+                ? 'bg-amber-50 text-amber-700'
+                : 'bg-red-50 text-red-700');
+
+        const lista = document.getElementById('detListaProductosOrden');
+        lista.innerHTML = o.detalles.map(d => `
+            <div class="flex justify-between text-sm py-1 border-b border-slate-50">
+                <span class="text-slate-700">${d.nombre} <strong class="text-slate-900">× ${d.cantidad}</strong></span>
+                <span class="font-semibold text-slate-900">S/ ${(d.cantidad * d.costo).toFixed(2)}</span>
+            </div>
+        `).join('');
+
+        const pie = document.getElementById('pieAccionesDetalleOrden');
+        if (o.estado === 'Pendiente') {
+            document.getElementById('inputAnularOrdenId').value = o.id;
+            document.getElementById('btnIrARecepcionDesdeDetalle').onclick = function () {
+                cerrarModalDetalleOrden();
+                abrirModalConfirmarRecepcion(o.id);
+            };
+            pie.classList.remove('hidden');
+            pie.classList.add('flex');
+        } else {
+            pie.classList.add('hidden');
+            pie.classList.remove('flex');
+        }
+
+        const modal = document.getElementById('modalDetalleOrden');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function cerrarModalDetalleOrden() {
+        const modal = document.getElementById('modalDetalleOrden');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function abrirModalConfirmarRecepcion(ordenId) {
+        const o = ORDENES_DATA.find(x => x.id === ordenId);
+        if (!o) return;
+
+        document.getElementById('tituloConfirmarRecepcion').textContent = `Confirmar recepción — ${o.numero}`;
+        document.getElementById('inputRecepcionOrdenId').value = o.id;
+
+        const cont = document.getElementById('contenedorItemsRecepcion');
+        cont.innerHTML = o.detalles.map((d, idx) => `
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <input type="hidden" name="Items[${idx}].ProductoId" value="${d.productoId}" />
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs font-semibold text-slate-900 truncate">${d.nombre}</div>
+                    <div class="text-[11px] text-slate-400">Solicitado: ${d.cantidad} · Costo: S/ ${d.costo.toFixed(2)}</div>
+                </div>
+                <input type="number" name="Items[${idx}].CantidadRecibida" min="0" step="any" value="${d.cantidad}"
+                       class="input-chininin !w-24 text-center font-bold text-sm" required />
+            </div>
+        `).join('');
+
+        const modal = document.getElementById('modalConfirmarRecepcion');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function cerrarModalConfirmarRecepcion() {
+        const modal = document.getElementById('modalConfirmarRecepcion');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+</script>
+}

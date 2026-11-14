@@ -20,6 +20,8 @@ builder.Services.AddScoped<IProveedorRepository, ProveedorRepository>();
 builder.Services.AddScoped<IClienteRepository, ClienteRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IVentaRepository, VentaRepository>();
+builder.Services.AddScoped<IOrdenCompraRepository, OrdenCompraRepository>();
+builder.Services.AddScoped<IKardexRepository, KardexRepository>();
 
 builder.Services.AddSingleton<SunatReniecMotorExterno>();
 builder.Services.AddSingleton(_ => ConfiguracionTiendaSingleton.Instancia);
@@ -32,6 +34,8 @@ builder.Services.AddScoped<IProveedorService, ProveedorService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IVentaService, VentaService>();
+builder.Services.AddScoped<IOrdenCompraService, OrdenCompraService>();
+builder.Services.AddScoped<IKardexService, KardexService>();
 
 // 3. Autenticación Basada en Cookies para Sesión Web Segura
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

@@ -1,21 +1,61 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Minimarket.Front.Models;
+using Minimarket.Negocio.Interfaces;
 
 namespace Minimarket.Front.Controllers;
 
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = "Administrador,Almacenero")]
 public class KardexController : Controller
 {
-    public IActionResult Index()
+    private readonly IKardexService _kardexService;
+    private readonly IProductoService _productoService;
+
+    public KardexController(
+        IKardexService kardexService,
+        IProductoService productoService)
     {
-        return View("~/Views/Shared/EnDesarrollo.cshtml", new ModuloEnDesarrolloViewModel
+        _kardexService = kardexService;
+        _productoService = productoService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Index(int? productoId = null, DateTime? desde = null, DateTime? hasta = null, string? tipo = null)
+    {
+        var vm = new KardexViewModel
         {
-            Modulo = "Auditoría de Movimientos y Kardex Físico",
-            Fase = "Fase 7 (Bloque Final)",
-            Patron = "Patrón Observer / Eventos de Dominio para Movimientos de Stock",
-            Icono = "book-open",
-            Descripcion = "Registro transaccional de ingresos por compra, salidas por venta, ajustes de inventario y saldos acumulados de existencias."
-        });
+            ProductoIdFiltro = productoId,
+            Desde = desde ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+            Hasta = hasta ?? DateTime.Today,
+            TipoFiltro = string.IsNullOrWhiteSpace(tipo) ? "TODOS" : tipo.Trim().ToUpperInvariant()
+        };
+
+        try
+        {
+            vm.Productos = await _productoService.ListarCatalogoAsync();
+            if (vm.ProductoIdFiltro.HasValue && vm.ProductoIdFiltro.Value > 0)
+            {
+                vm.ProductoSeleccionado = vm.Productos.FirstOrDefault(p => p.Id == vm.ProductoIdFiltro.Value);
+            }
+
+            if (vm.Desde.Date > vm.Hasta.Date)
+            {
+                TempData["ToastError"] = "Intervalo inválido: la fecha inicial no puede ser posterior a la fecha final. Seleccione un rango de fechas válido.";
+                return View(vm);
+            }
+
+            vm.Movimientos = await _kardexService.ListarMovimientosAsync(
+                vm.ProductoIdFiltro,
+                vm.Desde,
+                vm.Hasta,
+                vm.TipoFiltro,
+                400);
+        }
+        catch (Exception ex)
+        {
+            TempData["ToastError"] = $"Error al cargar el Kardex: {ex.Message}";
+        }
+
+        return View(vm);
     }
 }

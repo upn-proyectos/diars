@@ -17,6 +17,8 @@ public class MinimarketDbContext : DbContext
     public DbSet<Cliente> Clientes => Set<Cliente>();
     public DbSet<Venta> Ventas => Set<Venta>();
     public DbSet<DetalleVenta> DetalleVentas => Set<DetalleVenta>();
+    public DbSet<OrdenCompra> OrdenesCompra => Set<OrdenCompra>();
+    public DbSet<DetalleOrden> DetallesOrden => Set<DetalleOrden>();
     public DbSet<Kardex> Kardex => Set<Kardex>();
     public DbSet<ConfiguracionTienda> Configuracion => Set<ConfiguracionTienda>();
 
@@ -178,6 +180,50 @@ public class MinimarketDbContext : DbContext
             entity.HasKey(cfg => cfg.Id);
             entity.Property(cfg => cfg.NombreComercio).HasMaxLength(150).IsRequired();
             entity.Property(cfg => cfg.TasaIgv).HasColumnType("decimal(5,2)").IsRequired();
+        });
+
+        // OrdenesCompra
+        modelBuilder.Entity<OrdenCompra>(entity =>
+        {
+            entity.ToTable("OrdenesCompra");
+            entity.HasKey(o => o.Id);
+            entity.Property(o => o.NumeroOrden).HasMaxLength(30).IsRequired();
+            entity.HasIndex(o => o.NumeroOrden).IsUnique();
+            entity.Property(o => o.Estado).HasMaxLength(20).HasDefaultValue("Pendiente").IsRequired();
+            entity.Property(o => o.Total).HasColumnType("decimal(18,2)").IsRequired();
+            entity.Property(o => o.Observaciones).HasMaxLength(250);
+
+            entity.HasOne(o => o.Proveedor)
+                  .WithMany()
+                  .HasForeignKey(o => o.ProveedorId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(o => o.Usuario)
+                  .WithMany()
+                  .HasForeignKey(o => o.UsuarioId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // DetallesOrden
+        modelBuilder.Entity<DetalleOrden>(entity =>
+        {
+            entity.ToTable("DetallesOrden");
+            entity.HasKey(d => d.Id);
+            entity.Property(d => d.NombreProducto).HasMaxLength(150).IsRequired();
+            entity.Property(d => d.Cantidad).HasColumnType("decimal(10,3)").IsRequired();
+            entity.Property(d => d.CantidadRecibida).HasColumnType("decimal(10,3)").IsRequired();
+            entity.Property(d => d.CostoUnitario).HasColumnType("decimal(18,2)").IsRequired();
+            entity.Property(d => d.Subtotal).HasColumnType("decimal(18,2)").IsRequired();
+
+            entity.HasOne(d => d.OrdenCompra)
+                  .WithMany(o => o.Detalles)
+                  .HasForeignKey(d => d.OrdenCompraId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Producto)
+                  .WithMany()
+                  .HasForeignKey(d => d.ProductoId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
