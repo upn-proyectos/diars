@@ -1,0 +1,425 @@
+@model Minimarket.Front.Models.ReportesViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Reportes Comerciales";
+    var toastError = TempData["ToastError"] as string;
+    var maxDiaSoles = Model.VentasPorDia.Count > 0 ? Math.Max(Model.VentasPorDia.Max(d => d.TotalSoles), 1m) : 1m;
+    var top5Productos = Model.VentasPorProducto.OrderByDescending(p => p.CantidadVendida).Take(5).ToList();
+    var maxCantVendida = top5Productos.Count > 0 ? Math.Max(top5Productos.Max(p => p.CantidadVendida), 1m) : 1m;
+}
+
+<div class="space-y-6">
+    @if (!string.IsNullOrWhiteSpace(toastError))
+    {
+        <div id="alertaErrorReporte" role="alert" class="flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 shrink-0"></i>
+                <span class="font-medium">@toastError</span>
+            </div>
+            <button type="button" onclick="document.getElementById('alertaErrorReporte')?.remove()" class="text-red-600 hover:text-red-800 p-1">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Encabezado Principal + Accesos Rápidos de Período y Exportación CSV -->
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <div class="flex items-center gap-2">
+                <h1 class="text-2xl font-bold text-slate-900">Reportes de ventas</h1>
+                <span class="badge-chininin bg-brand-50 text-brand-700 border border-brand-200 text-[11px]">
+                    <i data-lucide="bar-chart-3" class="w-3 h-3"></i> CU-07 · RF-06 Consolidado Comercial
+                </span>
+            </div>
+            <p class="text-slate-500 text-sm mt-1">
+                Análisis financiero de ingresos, métodos de pago, transacciones y rentabilidad por producto (@Model.Desde.ToString("dd/MM/yyyy") al @Model.Hasta.ToString("dd/MM/yyyy"))
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white">
+                <a asp-controller="Reportes" asp-action="Index" asp-route-periodo="hoy"
+                   class="px-3.5 py-2 text-xs font-semibold transition @(Model.Desde == DateTime.Today && Model.Hasta == DateTime.Today ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-50")">
+                    Hoy
+                </a>
+                <a asp-controller="Reportes" asp-action="Index" asp-route-periodo="semana"
+                   class="px-3.5 py-2 text-xs font-semibold border-x border-slate-200 transition @(Model.Desde == DateTime.Today.AddDays(-6) && Model.Hasta == DateTime.Today ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-50")">
+                    Últimos 7 días
+                </a>
+                <a asp-controller="Reportes" asp-action="Index" asp-route-periodo="mes"
+                   class="px-3.5 py-2 text-xs font-semibold transition @(Model.Desde == new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1) && Model.Hasta == DateTime.Today ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-50")">
+                    Mes actual
+                </a>
+            </div>
+
+            <button type="button"
+                    onclick="exportarReporteVentasCsv()"
+                    disabled="@(Model.Ventas.Count == 0)"
+                    class="btn-brand-secondary text-xs disabled:opacity-40 cursor-pointer">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>Exportar CSV</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtro por Rango de Fechas (Con Validación PF-21) -->
+    <form asp-controller="Reportes" asp-action="Index" method="get" onsubmit="return validarRangoFechasReporte()" class="card-chininin p-4 flex flex-wrap items-end gap-3">
+        <div>
+            <label for="inputReporteDesde" class="block text-xs font-semibold text-slate-600 mb-1">Fecha inicial (Desde)</label>
+            <input id="inputReporteDesde" type="date" name="desde" value="@Model.Desde.ToString("yyyy-MM-dd")"
+                   class="input-chininin !w-auto font-mono text-xs" required />
+        </div>
+        <div>
+            <label for="inputReporteHasta" class="block text-xs font-semibold text-slate-600 mb-1">Fecha final (Hasta)</label>
+            <input id="inputReporteHasta" type="date" name="hasta" value="@Model.Hasta.ToString("yyyy-MM-dd")"
+                   class="input-chininin !w-auto font-mono text-xs" required />
+        </div>
+        <button type="submit" class="btn-brand-primary">
+            <i data-lucide="filter" class="w-4 h-4"></i>
+            <span>Consultar período</span>
+        </button>
+        <p id="errRangoFechasCliente" class="hidden w-full text-xs text-red-600 font-semibold mt-1">
+            Intervalo de fechas inválido: la fecha inicial no puede ser posterior a la fecha final. Seleccione un rango válido.
+        </p>
+    </form>
+
+    <!-- 4 Tarjetas KPI Principales (Idénticas a Reportes.tsx + Desglose IGV de 5.7.1) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="card-chininin p-5">
+            <div class="w-10 h-10 rounded-xl grid place-items-center bg-brand-50 text-brand-700 mb-3">
+                <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+            </div>
+            <div class="text-2xl font-extrabold text-slate-900">S/ @Model.TotalIngresos.ToString("N2")</div>
+            <div class="text-sm font-medium text-slate-500 mt-0.5">Ventas totales del período</div>
+            <div class="text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100 flex justify-between">
+                <span>Subtotal: <strong>S/ @Model.TotalSubtotalNeto.ToString("N2")</strong></span>
+                <span>IGV (18%): <strong>S/ @Model.TotalIgv.ToString("N2")</strong></span>
+            </div>
+        </div>
+
+        <div class="card-chininin p-5">
+            <div class="w-10 h-10 rounded-xl grid place-items-center bg-blue-50 text-blue-700 mb-3">
+                <i data-lucide="receipt" class="w-5 h-5"></i>
+            </div>
+            <div class="text-2xl font-extrabold text-slate-900">@Model.TotalTransacciones</div>
+            <div class="text-sm font-medium text-slate-500 mt-0.5">Transacciones emitidas</div>
+            <div class="text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100">
+                Comprobantes confirmados en SQL Server
+            </div>
+        </div>
+
+        <div class="card-chininin p-5">
+            <div class="w-10 h-10 rounded-xl grid place-items-center bg-amber-50 text-amber-700 mb-3">
+                <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+            </div>
+            <div class="text-2xl font-extrabold text-slate-900">S/ @Model.TicketPromedio.ToString("N2")</div>
+            <div class="text-sm font-medium text-slate-500 mt-0.5">Ticket promedio por venta</div>
+            <div class="text-[11px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-100">
+                Valor promedio de compra por cliente
+            </div>
+        </div>
+
+        <div class="card-chininin p-5">
+            <div class="w-10 h-10 rounded-xl grid place-items-center bg-purple-50 text-purple-700 mb-3">
+                <i data-lucide="trending-up" class="w-5 h-5"></i>
+            </div>
+            <div class="text-2xl font-extrabold text-slate-900">S/ @Model.UtilidadBrutaEstimada.ToString("N2")</div>
+            <div class="text-sm font-medium text-slate-500 mt-0.5">Utilidad bruta estimada</div>
+            <div class="text-[11px] text-emerald-700 font-semibold mt-1.5 pt-1.5 border-t border-slate-100">
+                Margen comercial promedio: @Model.MargenPorcentajeGlobal.ToString("0.0")%
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección Gráfica: Evolución Diaria + Métodos de Pago + Top 5 Productos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Evolución de Ventas por Día -->
+        <div class="card-chininin p-5 lg:col-span-2 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <h3 class="font-bold text-slate-900">Evolución de ventas por fecha</h3>
+                    <span class="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full">En Soles (S/)</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-4">Ingresos diarios acumulados dentro del período consultado</p>
+            </div>
+
+            @if (Model.VentasPorDia.Count == 0)
+            {
+                <div class="flex items-center justify-center h-48 text-slate-400 text-sm">
+                    Sin ventas registradas en el rango de fechas seleccionado
+                </div>
+            }
+            else
+            {
+                <div class="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    @foreach (var d in Model.VentasPorDia)
+                    {
+                        var pct = Math.Min(100m, Math.Round((d.TotalSoles / maxDiaSoles) * 100m, 1));
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs">
+                                <span class="font-mono font-semibold text-slate-700">@d.EtiquetaFecha <span class="text-slate-400 font-normal">(@d.CantidadVentas @(d.CantidadVentas == 1 ? "venta" : "ventas"))</span></span>
+                                <span class="font-bold text-slate-900">S/ @d.TotalSoles.ToString("N2")</span>
+                            </div>
+                            <div class="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-brand-600 rounded-full transition-all" style="width: @pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Distribución por Método de Pago (Patrón Strategy) -->
+        <div class="card-chininin p-5">
+            <h3 class="font-bold text-slate-900">Métodos de pago</h3>
+            <p class="text-xs text-slate-400 mb-4">Distribución recaudada según estrategia de cobro</p>
+
+            @if (Model.VentasPorMetodo.Count == 0)
+            {
+                <div class="flex items-center justify-center h-48 text-slate-400 text-sm">
+                    Sin datos en el período
+                </div>
+            }
+            else
+            {
+                <div class="space-y-3.5">
+                    @foreach (var m in Model.VentasPorMetodo)
+                    {
+                        var colorBarra = m.MetodoPago.Equals("Efectivo", StringComparison.OrdinalIgnoreCase)
+                            ? "bg-brand-600"
+                            : m.MetodoPago.Equals("Yape", StringComparison.OrdinalIgnoreCase)
+                                ? "bg-purple-600"
+                                : m.MetodoPago.Equals("Plin", StringComparison.OrdinalIgnoreCase)
+                                    ? "bg-blue-600"
+                                    : "bg-amber-500";
+
+                        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="font-bold text-slate-800">@m.MetodoPago</span>
+                                <span class="font-bold text-slate-900">S/ @m.TotalSoles.ToString("N2")</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 mb-1.5">
+                                <span>@m.CantidadVentas @(m.CantidadVentas == 1 ? "transacción" : "transacciones")</span>
+                                <span class="font-semibold text-slate-600">@m.Porcentaje.ToString("0.0")%</span>
+                            </div>
+                            <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full @colorBarra rounded-full" style="width: @m.Porcentaje.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Top 5 Productos Más Vendidos + Tabla de Rentabilidad por Producto (Sección 5.7.1) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="card-chininin p-5">
+            <h3 class="font-bold text-slate-900 mb-1">Top 5 productos más vendidos</h3>
+            <p class="text-xs text-slate-400 mb-4">Mayor rotación en unidades / kg</p>
+
+            @if (top5Productos.Count == 0)
+            {
+                <p class="text-sm text-slate-400 text-center py-10">Sin ventas en el período</p>
+            }
+            else
+            {
+                <div class="space-y-3.5">
+                    @for (int i = 0; i < top5Productos.Count; i++)
+                    {
+                        var p = top5Productos[i];
+                        var pct = Math.Min(100m, Math.Round((p.CantidadVendida / maxCantVendida) * 100m, 1));
+                        <div class="flex items-center gap-3">
+                            <div class="w-7 h-7 rounded-lg bg-brand-50 text-brand-700 grid place-items-center text-xs font-bold shrink-0">
+                                @(i + 1)
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-xs font-semibold text-slate-900 truncate" title="@p.NombreProducto">@p.NombreProducto</div>
+                                <div class="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                    <div class="h-full bg-brand-500 rounded-full" style="width: @pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></div>
+                                </div>
+                            </div>
+                            <div class="text-xs font-bold text-slate-700 shrink-0">@p.CantidadVendida.ToString("0.###")</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Tabla de Ventas por Producto y Margen Bruto Estimado (Exigida en 5.7.1) -->
+        <div class="card-chininin overflow-hidden lg:col-span-2">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-900">Ventas y margen bruto por producto</h3>
+                    <p class="text-xs text-slate-400">Consolidado de cantidades vendidas, ingresos y utilidad estimada</p>
+                </div>
+                <span class="badge-chininin bg-slate-100 text-slate-700">@Model.VentasPorProducto.Count ítems</span>
+            </div>
+
+            <div class="overflow-x-auto max-h-72">
+                <table class="table-chininin">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th class="text-center">Cant. vendida</th>
+                            <th class="text-right">Ingresos (S/)</th>
+                            <th class="text-right">Costo (S/)</th>
+                            <th class="text-right">Margen bruto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.VentasPorProducto.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-8 text-slate-400">
+                                    Sin productos vendidos en el rango seleccionado
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var prod in Model.VentasPorProducto)
+                            {
+                                <tr>
+                                    <td class="font-semibold text-slate-900 text-xs">@prod.NombreProducto</td>
+                                    <td class="text-center font-mono text-xs font-semibold text-slate-700">@prod.CantidadVendida.ToString("0.###")</td>
+                                    <td class="text-right font-semibold text-slate-900 text-xs">S/ @prod.IngresosTotales.ToString("0.00")</td>
+                                    <td class="text-right text-slate-500 text-xs">S/ @prod.CostoTotal.ToString("0.00")</td>
+                                    <td class="text-right">
+                                        <span class="font-bold text-brand-700 text-xs">S/ @prod.UtilidadBruta.ToString("0.00")</span>
+                                        <span class="text-[10px] text-slate-400 ml-1">(@prod.MargenPorcentaje.ToString("0.0")%)</span>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Detallada de Transacciones del Período (PF-20 y Sección 5.7.1) -->
+    <div class="card-chininin overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+                <h3 class="font-bold text-slate-900">Detalle de transacciones comerciales</h3>
+                <p class="text-xs text-slate-400">Comprobantes emitidos con cliente, cajero, método de pago e importes</p>
+            </div>
+            <span class="text-xs font-semibold text-slate-500">@Model.Ventas.Count comprobantes</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table-chininin">
+                <thead>
+                    <tr>
+                        <th>N° Comprobante</th>
+                        <th>Fecha y hora</th>
+                        <th>Cliente</th>
+                        <th>Cajero</th>
+                        <th>Método pago</th>
+                        <th class="text-right">Subtotal</th>
+                        <th class="text-right">IGV</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Ticket</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Ventas.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-10 text-slate-400">
+                                No se registraron transacciones en el rango de fechas consultado
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var v in Model.Ventas)
+                        {
+                            <tr>
+                                <td class="font-mono font-bold text-slate-900 text-xs">@v.NumeroBoleta</td>
+                                <td class="font-mono text-xs text-slate-500 whitespace-nowrap">@v.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    <div class="text-xs font-medium text-slate-800">@v.ClienteNombre</div>
+                                    <div class="text-[10px] font-mono text-slate-400">@v.ClienteDocumento</div>
+                                </td>
+                                <td class="text-xs text-slate-600">@v.CajeroNombre</td>
+                                <td>
+                                    <span class="badge-chininin bg-slate-100 text-slate-700 text-[11px]">@v.MetodoPago</span>
+                                </td>
+                                <td class="text-right text-xs text-slate-600">S/ @v.Subtotal.ToString("0.00")</td>
+                                <td class="text-right text-xs text-slate-600">S/ @v.Igv.ToString("0.00")</td>
+                                <td class="text-right font-bold text-slate-900 text-xs">S/ @v.Total.ToString("0.00")</td>
+                                <td class="text-right">
+                                    <a asp-controller="Pos" asp-action="Comprobante" asp-route-id="@v.Id" target="_blank"
+                                       class="btn-brand-ghost py-1 px-2 text-xs text-brand-700 hover:bg-brand-50">
+                                        <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                                        <span>Ver</span>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const VENTAS_REPORTE_CSV = @Html.Raw(JsonSerializer.Serialize(Model.Ventas.Select(v => new {
+        boleta = v.NumeroBoleta,
+        fecha = v.Fecha.ToString("yyyy-MM-dd HH:mm"),
+        cliente = v.ClienteNombre,
+        documento = v.ClienteDocumento,
+        cajero = v.CajeroNombre,
+        metodo = v.MetodoPago,
+        subtotal = v.Subtotal.ToString("0.00"),
+        igv = v.Igv.ToString("0.00"),
+        total = v.Total.ToString("0.00")
+    })));
+
+    function validarRangoFechasReporte() {
+        const desde = document.getElementById('inputReporteDesde').value;
+        const hasta = document.getElementById('inputReporteHasta').value;
+        const err = document.getElementById('errRangoFechasCliente');
+
+        if (desde && hasta && desde > hasta) {
+            err.classList.remove('hidden');
+            return false;
+        }
+        err.classList.add('hidden');
+        return true;
+    }
+
+    function exportarReporteVentasCsv() {
+        if (!VENTAS_REPORTE_CSV || VENTAS_REPORTE_CSV.length === 0) return;
+
+        const cabeceras = ['Comprobante', 'Fecha y Hora', 'Cliente', 'Documento', 'Cajero', 'Metodo de Pago', 'Subtotal (S/)', 'IGV (S/)', 'Total (S/)'];
+        const filas = [
+            cabeceras.join(','),
+            ...VENTAS_REPORTE_CSV.map(v => [
+                `"${v.boleta}"`,
+                `"${v.fecha}"`,
+                `"${(v.cliente || '').replace(/"/g, '""')}"`,
+                `"${v.documento}"`,
+                `"${(v.cajero || '').replace(/"/g, '""')}"`,
+                `"${v.metodo}"`,
+                v.subtotal,
+                v.igv,
+                v.total
+            ].join(','))
+        ];
+
+        const contenido = '\uFEFF' + filas.join('\n');
+        const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reporte-ventas-chininin-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+</script>
+}

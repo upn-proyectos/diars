@@ -167,3 +167,35 @@ BEGIN
     );
 END
 GO
+
+-- 11. TABLA ORDENES_COMPRA (Abastecimiento CU-06 / RF-04)
+IF OBJECT_ID(N'dbo.OrdenesCompra', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.OrdenesCompra (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        NumeroOrden NVARCHAR(30) NOT NULL UNIQUE,
+        FechaEmision DATETIME2 NOT NULL DEFAULT GETDATE(),
+        FechaRecepcion DATETIME2 NULL,
+        ProveedorId INT NOT NULL FOREIGN KEY REFERENCES dbo.Proveedores(Id),
+        UsuarioId INT NOT NULL FOREIGN KEY REFERENCES dbo.Usuarios(Id),
+        Total DECIMAL(18,2) NOT NULL DEFAULT 0,
+        Estado NVARCHAR(20) NOT NULL DEFAULT N'Pendiente',
+        Observaciones NVARCHAR(300) NOT NULL DEFAULT N''
+    );
+END
+GO
+
+-- 12. TABLA DETALLES_ORDEN
+IF OBJECT_ID(N'dbo.DetallesOrden', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.DetallesOrden (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        OrdenCompraId INT NOT NULL FOREIGN KEY REFERENCES dbo.OrdenesCompra(Id) ON DELETE CASCADE,
+        ProductoId INT NOT NULL FOREIGN KEY REFERENCES dbo.Productos(Id),
+        NombreProducto NVARCHAR(150) NOT NULL,
+        Cantidad DECIMAL(10,3) NOT NULL,
+        CostoUnitario DECIMAL(18,2) NOT NULL,
+        Subtotal DECIMAL(18,2) NOT NULL
+    );
+END
+GO

@@ -75,8 +75,8 @@ minimarket-diars/
 | **Empresarial** | **Repository Pattern** | `Back/Minimarket.Datos/Repositories/` | Abstrae las consultas de Entity Framework Core mediante `IProductoRepository` e `IProveedorRepository`, incluyendo transacciones ACID para Kardex. | ✅ Implementado |
 | **Estructural (GoF)** | **Adapter Pattern** | `Back/Minimarket.Negocio/Patterns/Adapter/` | `ValidadorDocumentoPeruAdapter` envuelve a `SunatReniecMotorExterno` para adaptar la validación tributaria de **RUC (11 dígitos SUNAT)** y **DNI (8 dígitos)** a `IValidadorDocumentoAdapter`. | ✅ Implementado |
 | **Framework / IoC** | **Dependency Injection** | `Program.cs` (`Front` y `API`) | Inyección por constructor de contextos, repositorios, adaptadores y servicios con ciclo de vida controlado (`Scoped` / `Singleton`). | ✅ Implementado |
-| **Creacional (GoF)** | **Singleton Pattern** | `Back/Minimarket.Negocio/Patterns/Singleton/` | Centralización en memoria de parámetros globales de tienda (IGV 18%, serie `B001` y correlativo de boletas). | ⏳ Fase 6 (T3) |
-| **Comportamiento (GoF)** | **Strategy Pattern** | `Back/Minimarket.Negocio/Patterns/Strategy/` | Algoritmos intercambiables para métodos de pago en el POS (`Efectivo`, `Yape/Plin`, `Tarjeta`). | ⏳ Fase 6 (T3) |
+| **Creacional (GoF)** | **Singleton Pattern** | `Back/Minimarket.Negocio/Patterns/Singleton/` | Centralización thread-safe en memoria (`ConfiguracionTiendaSingleton`) de parámetros globales de tienda (IGV 18%, serie `B001` y correlativo de boletas). | ✅ Implementado |
+| **Comportamiento (GoF)** | **Strategy Pattern** | `Back/Minimarket.Negocio/Patterns/Strategy/` | Algoritmos intercambiables (`IPagoStrategy`, `PagoStrategyContext`) para procesar métodos de pago en el POS (`Efectivo`, `Yape/Plin`, `Tarjeta`). | ✅ Implementado |
 
 ---
 
@@ -84,19 +84,25 @@ minimarket-diars/
 
 1. **Dashboard Ejecutivo (`HomeController`):**
    - Indicadores KPI en tiempo real conectados a SQL Server (Total de productos activos, proveedores validados, categorías, valorización de almacén y tabla de alertas de stock crítico).
-2. **Módulo de Seguridad y Control de Acceso (`AccountController` / `AuthService`):**
-   - Autenticación con cookies seguras (`CookieAuthenticationDefaults`), protección de rutas con `[Authorize]` y navegación adaptativa según los **3 roles oficiales** (`Administrador`, `Almacenero`, `Cajero`).
-3. **Módulo de Inventario y Catálogo (`ProductosController` / `ProductoService`):**
+2. **Módulo de Seguridad y Control de Acceso (`AccountController` / `UsuariosController` / `AuthService`):**
+   - Autenticación con cookies seguras (`CookieAuthenticationDefaults`), contraseñas encriptadas con **PBKDF2-SHA256** (`PasswordHasher`, `RNF-05`), protección de rutas con `[Authorize]` y navegación adaptativa según los **3 roles oficiales** (`Administrador`, `Almacenero`, `Cajero`).
+3. **Módulo de Punto de Venta POS (`PosController` / `VentaService`):**
+   - Búsqueda rápida por lector de código de barras o nombre, carrito dinámico con desglose tributario de IGV (18%), selección de cliente y métodos de pago polimórficos (**Patrón Strategy**).
+   - Emisión de boletas correlativas `B001-XXXXX` (**Patrón Singleton**) en transacción ACID (`IsolationLevel.Serializable`) con descuento automático de stock y registro `SALIDA` en Kardex.
+4. **Módulo de Inventario y Catálogo (`ProductosController` / `ProductoService`):**
    - Listado general con buscador reactivo por nombre/código de barras, filtro por categoría y filtros rápidos (*Todos*, *Stock Bajo*, *Por Vencer*).
    - Semáforo automático de stock (`Stock <= StockMinimo`) y semáforo FEFO de vencimiento ($\le 7$ días crítico, $\le 30$ días próximo).
-   - Creación y edición de productos con calculadora de margen comercial en vivo y creación rápida de categoría sin salir del modal.
-   - Ajuste físico de existencias con registro transaccional automático en la tabla `Kardex`.
-4. **Módulo de Categorías (`CategoriasController`):**
+   - Creación y edición de productos con calculadora de margen comercial en vivo y ajuste físico de existencias con registro en `Kardex`.
+5. **Módulo de Categorías (`CategoriasController`):**
    - Gestión visual por tarjetas con conteo de productos asignados, barra de ocupación, edición y protección de integridad referencial al eliminar.
-5. **Módulo de Proveedores y Abastecimiento (`ProveedoresController` / `ProveedorService`):**
-   - Directorio de proveedores con validación en vivo de **RUC de 11 dígitos** e identificación automática del tipo de contribuyente (`Persona Jurídica RUC 20` / `Persona Natural con Negocio RUC 10`) mediante el **Patrón Adapter**.
-6. **Punto de Venta (POS), Kardex y Reportes:**
-   - Programados para el Bloque B (Entrega Final T3).
+6. **Módulo de Proveedores y Órdenes de Compra (`ProveedoresController` / `ComprasController`):**
+   - Directorio de proveedores con validación en vivo de **RUC de 11 dígitos** (**Patrón Adapter**).
+   - Emisión de Órdenes de Compra (`OC-XXXXX`) y recepción transaccional de mercadería que incrementa el stock y registra automáticamente movimientos `ENTRADA` en el Kardex.
+7. **Módulo de Kardex y Auditoría (`KardexController` / `KardexService`):**
+   - Trazabilidad histórica de movimientos (`ENTRADA`, `SALIDA`, `AJUSTE`), filtros por rango de fechas con validación de intervalo, producto y tipo de movimiento, más exportación a CSV.
+8. **Módulo de Clientes y Reportes Comerciales (`ClientesController` / `ReportesController`):**
+   - Directorio de clientes con validación de DNI (8 dígitos) y RUC (11 dígitos) mediante el **Patrón Adapter**.
+   - Reportes gerenciales por rango de fechas con KPIs de recaudación, IGV, desglose por método de pago, margen bruto estimado por producto y exportación a CSV.
 
 ---
 
